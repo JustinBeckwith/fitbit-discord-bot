@@ -1,6 +1,6 @@
 import util from 'util';
 import config from './config.js';
-import { DiscordData, storeDiscordTokens } from './storage.js';
+import storage, { DiscordData } from './storage.js';
 import { request, GaxiosError } from 'gaxios';
 
 export interface OAuth2TokenResponse {
@@ -202,7 +202,7 @@ export async function getAccessToken(userId: string, data: DiscordData) {
     console.log(`new discord access token: ${r.data.access_token}`);
     data.access_token = r.data.access_token;
     data.expires_at = Date.now() + r.data.expires_in * 1000;
-    await storeDiscordTokens(userId, data);
+    await storage.storeDiscordTokens(userId, data);
     return r.data.access_token;
   }
   return data.access_token;

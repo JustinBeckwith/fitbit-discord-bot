@@ -5,7 +5,7 @@ import {
   InteractionType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import * as storage from './storage.js';
+import storage from './storage.js';
 import { DUMP_COMMAND } from './commands.js';
 import config from './config.js';
 import * as fitbit from './fitbit.js';

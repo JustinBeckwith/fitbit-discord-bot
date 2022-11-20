@@ -12,6 +12,7 @@ const config = {
   FITBIT_CLIENT_SECRET: nconf.get('FITBIT_CLIENT_SECRET') as string,
   FITBIT_REDIRECT_URI: nconf.get('FITBIT_REDIRECT_URI') as string,
   FITBIT_SUBSCRIBER_VERIFY: nconf.get('FITBIT_SUBSCRIBER_VERIFY') as string,
+  DATABASE_TYPE: nconf.get('DATABASE_TYPE') as string,
 };
 
 export default config;

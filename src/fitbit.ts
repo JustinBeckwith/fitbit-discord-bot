@@ -1,7 +1,7 @@
 import config from './config.js';
 import crypto from 'crypto';
 import { request } from 'gaxios';
-import { FitbitData, storeFitbitTokens } from './storage.js';
+import storage, { FitbitData } from './storage.js';
 
 export interface OAuthTokens {
   access_token: string;
@@ -234,7 +234,7 @@ async function getAccessToken(userId: string, data: FitbitData) {
     console.log(`new access token: ${tokens.access_token}`);
     data.access_token = tokens.access_token;
     data.expires_at = Date.now() + tokens.expires_in * 1000;
-    await storeFitbitTokens(userId, data);
+    await storage.storeFitbitTokens(userId, data);
     return tokens.access_token;
   }
   return data.access_token;

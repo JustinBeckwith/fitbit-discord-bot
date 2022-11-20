@@ -16,8 +16,7 @@
     "dev": "tsc --watch & nodemon -w build/src build/src/server.js",
     "build": "tsc",
     "coverage": "c8 report --reporter=json",
-    "start": "node build/src/index.js",
-    "register": "node build/src/register.js"
+    "start": "node build/src/server.js"
   },
   "dependencies": {
     "body-parser": "^1.20.1",

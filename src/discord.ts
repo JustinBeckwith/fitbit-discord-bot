@@ -127,26 +127,26 @@ export async function registerMetadataSchema() {
   const body = [
     {
       key: 'averagedailysteps',
-      name: 'averagedailysteps',
+      name: 'Average Daily Steps',
       description: 'Average Daily Steps Greater Than',
       type: 2, // supported types: number_lt=1, number_gt=2, number_eq=3 number_neq=4, datetime_lt=5, datetime_gt=6, boolean_eq=7
     },
     {
       key: 'ambassador',
-      name: 'ambassador',
+      name: 'Fitbit Ambassador',
       description: 'Is a Fitbit Ambassador',
       type: 7,
     },
     {
       key: 'membersince',
-      name: 'membersince',
-      description: 'Has been a member since',
+      name: 'Member Since',
+      description: 'Days since becoming a member',
       type: 6,
     },
     {
       key: 'iscoach',
-      name: 'iscoach',
-      description: 'Is a coach',
+      name: 'Is Coach',
+      description: 'Is a Fitbit coach',
       type: 7,
     },
   ];

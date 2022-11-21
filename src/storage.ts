@@ -2,6 +2,17 @@ import { createClient, RedisClientType } from 'redis';
 import { Firestore, Timestamp } from '@google-cloud/firestore';
 import config from './config.js';
 
+/**
+ * OAuth2 inherently requires storing access tokens, refresh tokens, and
+ * expiration times to ensure the bot service can continue to make authenticated
+ * calls to Fitbit and Discord on behalf of a given user. This file provides two
+ * example implementations: one in Redis, and one in Google Cloud Firestore.
+ * You can control which provider is used by modifying `config.json`.
+ */
+
+/**
+ * Shared interface for both storage providers.
+ */
 export interface StorageProvider {
   storeDiscordTokens(userId: string, data: DiscordData): Promise<void>;
   getDiscordTokens(userId: string): Promise<DiscordData>;
@@ -31,6 +42,9 @@ interface StateData {
   ttl?: Timestamp;
 }
 
+/**
+ * Redis storage provider.  Very nice when developing locally with Redis.
+ */
 export class RedisClient implements StorageProvider {
   private _client: RedisClientType;
 
@@ -83,6 +97,11 @@ export class RedisClient implements StorageProvider {
   }
 }
 
+/**
+ * Firestore storage provider.  Requires some work to use locally,
+ * but should work automatically from Cloud Run, GKE, etc.  Feel
+ * free to write your own provider for a database of your choice :)
+ */
 export class FirestoreClient implements StorageProvider {
   private db = new Firestore();
   private tbl = this.db.collection('fitbit');

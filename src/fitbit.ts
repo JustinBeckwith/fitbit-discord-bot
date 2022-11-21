@@ -3,6 +3,10 @@ import crypto from 'crypto';
 import { request } from 'gaxios';
 import storage, { FitbitData } from './storage.js';
 
+/**
+ * Code specific to communicating with the Fitbit API.
+ */
+
 export interface OAuthTokens {
   access_token: string;
   expires_in: number;
@@ -105,11 +109,26 @@ export interface ProfileData {
   };
 }
 
+/**
+ * Placeholder result for the slash command.
+ */
 export async function getDump() {
   return 'dump';
 }
 
-export function generateCodeVerifier() {
+/**
+ * The following methods all facilitate OAuth2 communication with Fitbit.
+ * See https://dev.fitbit.com/build/reference/web-api/developer-guide/authorization/
+ * for more details.
+ */
+
+/**
+ * The Fitbit OAuth2 API requires a cryptographic code verfier and challenge.
+ * This method generates both the challenge that will be sent with the initial
+ * request to the Fitbit OAuth2 consent dialog, and the verifier that needs to
+ * be used with the subsequent request for the access and refresh tokens.
+ */
+function generateCodeVerifier() {
   const randomString = crypto.randomBytes(96).toString('base64');
   // The valid characters in the code_verifier are [A-Z]/[a-z]/[0-9]/
   // -/./_/~. Base64 encoded strings are pretty close, so we're just
@@ -131,6 +150,10 @@ export function generateCodeVerifier() {
   return { codeVerifier, codeChallenge };
 }
 
+/**
+ * Generate a url which users will use to approve the current bot for access to
+ * their Fitbit account, along with the set of required scopes.
+ */
 export function getOAuthUrl() {
   const { codeVerifier, codeChallenge } = generateCodeVerifier();
   const state = crypto.randomBytes(20).toString('hex');
@@ -149,6 +172,10 @@ export function getOAuthUrl() {
   return { state, codeVerifier, url: url.toString() };
 }
 
+/**
+ * Given an OAuth2 code from the scope approval page, make a request to Fitbit's
+ * OAuth2 service to retreive an access token, refresh token, and expiration.
+ */
 export async function getOAuthTokens(code: string, codeVerifier: string) {
   const body = new URLSearchParams({
     client_id: config.FITBIT_CLIENT_ID,
@@ -169,48 +196,14 @@ export async function getOAuthTokens(code: string, codeVerifier: string) {
   return r.data;
 }
 
-export async function createSubscription(userId: string, data: FitbitData) {
-  // see https://dev.fitbit.com/build/reference/web-api/subscription/create-subscription/
-  // POST /1/user/[user-id]/[collection-path]/apiSubscriptions/[subscription-id].json
-  const url = `https://api.fitbit.com/1/user/-/apiSubscriptions/${data.discord_user_id}.json`;
-  const token = await getAccessToken(userId, data);
-  await request({
-    url,
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-export async function listSubscriptions(userId: string, data: FitbitData) {
-  // GET /1/user/[user-id]/[collection-path]/apiSubscriptions.json
-  const url = 'https://api.fitbit.com/1/user/-/apiSubscriptions.json';
-  const token = await getAccessToken(userId, data);
-  const res = await request({
-    url,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return res.data;
-}
-
-export async function getProfile(userId: string, data: FitbitData) {
-  // /1/user/[user-id]/profile.json
-  const url = `https://api.fitbit.com/1/user/-/profile.json`;
-  const token = await getAccessToken(userId, data);
-  const res = await request<ProfileData>({
-    url,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  return res.data;
-}
-
+/**
+ * The initial token request comes with both an access token and a refresh
+ * token.  Check if the access token has expired, and if it has, use the
+ * refresh token to acquire a new, fresh access token.
+ *
+ * See https://dev.fitbit.com/build/reference/web-api/authorization/refresh-token/.
+ */
 async function getAccessToken(userId: string, data: FitbitData) {
-  // https://dev.fitbit.com/build/reference/web-api/authorization/refresh-token/
   if (Date.now() > data.expires_at) {
     console.log('token expired, fetching a newsy one');
     const url = 'https://api.fitbit.com/oauth2/token';
@@ -238,4 +231,54 @@ async function getAccessToken(userId: string, data: FitbitData) {
     return tokens.access_token;
   }
   return data.access_token;
+}
+
+/*
+ * Each user registration requires the setup of a single subscription which
+ * enables webhook delivery for that user.
+ * See https://dev.fitbit.com/build/reference/web-api/subscription/create-subscription/.
+ */
+export async function createSubscription(userId: string, data: FitbitData) {
+  // POST /1/user/[user-id]/[collection-path]/apiSubscriptions/[subscription-id].json
+  const url = `https://api.fitbit.com/1/user/-/apiSubscriptions/${data.discord_user_id}.json`;
+  const token = await getAccessToken(userId, data);
+  await request({
+    url,
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+/**
+ * List all available subscriptions for the given user.
+ */
+export async function listSubscriptions(userId: string, data: FitbitData) {
+  // GET /1/user/[user-id]/[collection-path]/apiSubscriptions.json
+  const url = 'https://api.fitbit.com/1/user/-/apiSubscriptions.json';
+  const token = await getAccessToken(userId, data);
+  const res = await request({
+    url,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
+}
+
+/**
+ * Fetch the user profile for the current user.
+ */
+export async function getProfile(userId: string, data: FitbitData) {
+  // /1/user/[user-id]/profile.json
+  const url = `https://api.fitbit.com/1/user/-/profile.json`;
+  const token = await getAccessToken(userId, data);
+  const res = await request<ProfileData>({
+    url,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return res.data;
 }

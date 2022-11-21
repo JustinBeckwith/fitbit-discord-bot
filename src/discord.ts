@@ -3,6 +3,10 @@ import config from './config.js';
 import storage, { DiscordData } from './storage.js';
 import { request, GaxiosError } from 'gaxios';
 
+/**
+ * Code specific to communicating with the Discord API.
+ */
+
 export interface OAuth2TokenResponse {
   access_token: string;
   expires_in: number;
@@ -37,7 +41,16 @@ export interface OAuth2UserInfo {
   };
 }
 
-export function getOAuthUrl() {
+/**
+ * The following methods all facilitate OAuth2 communication with Discord.
+ * See https://discord.com/developers/docs/topics/oauth2 for more details.
+ */
+
+/**
+ * Generate the url which the user will be directed to in order to approve the
+ * bot, and see the list of requested scopes.
+ */
+export function getOAuthUrl(): string {
   const url = new URL('https://discord.com/api/oauth2/authorize');
   url.searchParams.set('client_id', config.DISCORD_CLIENT_ID);
   url.searchParams.set('redirect_uri', config.DISCORD_REDIRECT_URI);
@@ -47,7 +60,13 @@ export function getOAuthUrl() {
   return url.toString();
 }
 
-export async function getOAuthTokens(code: string) {
+/**
+ * Given an OAuth2 code from the scope approval page, make a request to Discord's
+ * OAuth2 service to retreive an access token, refresh token, and expiration.
+ */
+export async function getOAuthTokens(
+  code: string
+): Promise<OAuth2TokenResponse> {
   const url = 'https://discord.com/api/v10/oauth2/token';
   const data = new URLSearchParams({
     client_id: config.DISCORD_CLIENT_ID,
@@ -68,6 +87,40 @@ export async function getOAuthTokens(code: string) {
   return r.data;
 }
 
+/**
+ * The initial token request comes with both an access token and a refresh
+ * token.  Check if the access token has expired, and if it has, use the
+ * refresh token to acquire a new, fresh access token.
+ */
+export async function getAccessToken(userId: string, data: DiscordData) {
+  if (Date.now() > data.expires_at) {
+    const url = 'https://discord.com/api/v10/oauth2/token';
+    const body = new URLSearchParams({
+      client_id: config.DISCORD_CLIENT_ID,
+      client_secret: config.DISCORD_CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: data.refresh_token,
+    });
+    const r = await request<OAuth2TokenResponse>({
+      url,
+      body,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+    console.log(`new discord access token: ${r.data.access_token}`);
+    data.access_token = r.data.access_token;
+    data.expires_at = Date.now() + r.data.expires_in * 1000;
+    await storage.storeDiscordTokens(userId, data);
+    return r.data.access_token;
+  }
+  return data.access_token;
+}
+
+/**
+ * Given a user based access token, fetch profile information for the current user.
+ */
 export async function getUserData(tokens: OAuth2TokenResponse) {
   const url = 'https://discord.com/api/v10/oauth2/@me';
   const res = await request<OAuth2UserInfo>({
@@ -79,6 +132,10 @@ export async function getUserData(tokens: OAuth2TokenResponse) {
   return res.data;
 }
 
+/**
+ * Given metadata that matches the schema, push that data to Discord on behalf
+ * of the current user.
+ */
 export async function pushMetadata(
   userId: string,
   data: DiscordData,
@@ -88,7 +145,7 @@ export async function pushMetadata(
   const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
   const accessToken = await getAccessToken(userId, data);
   const body = {
-    platform_name: 'I have no idea what this is',
+    platform_name: 'Fitbit Discord Bot',
     metadata,
   };
   try {
@@ -109,6 +166,10 @@ export async function pushMetadata(
   }
 }
 
+/**
+ * Fetch the metadata currently pushed to Discord for the currently logged
+ * in user, for this specific bot.
+ */
 export async function getMetadata(userId: string, data: DiscordData) {
   // GET/PUT /users/@me/applications/:id/role-connection
   const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
@@ -122,6 +183,10 @@ export async function getMetadata(userId: string, data: DiscordData) {
   return res.data;
 }
 
+/**
+ * Register the metadata to be stored by Discord. This should be a one time action.
+ * Note: uses a Bot token for authentication, not a user token.
+ */
 export async function registerMetadataSchema() {
   const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
   const body = [
@@ -170,6 +235,10 @@ export async function registerMetadataSchema() {
   }
 }
 
+/**
+ * Fetch the metadata schema to be used by Discord for the current bot.
+ * Note: uses a Bot token for authentication, not a user token.
+ */
 export async function getMetadataSchema() {
   const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
   const res = await request({
@@ -180,30 +249,4 @@ export async function getMetadataSchema() {
     },
   });
   return res.data;
-}
-
-export async function getAccessToken(userId: string, data: DiscordData) {
-  if (Date.now() > data.expires_at) {
-    const url = 'https://discord.com/api/v10/oauth2/token';
-    const body = new URLSearchParams({
-      client_id: config.DISCORD_CLIENT_ID,
-      client_secret: config.DISCORD_CLIENT_SECRET,
-      grant_type: 'refresh_token',
-      refresh_token: data.refresh_token,
-    });
-    const r = await request<OAuth2TokenResponse>({
-      url,
-      body,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-    console.log(`new discord access token: ${r.data.access_token}`);
-    data.access_token = r.data.access_token;
-    data.expires_at = Date.now() + r.data.expires_in * 1000;
-    await storage.storeDiscordTokens(userId, data);
-    return r.data.access_token;
-  }
-  return data.access_token;
 }

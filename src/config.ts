@@ -1,4 +1,11 @@
 import nconf from 'nconf';
+
+/**
+ * Parse configuration data from either environment variables, command line
+ * arguments, or a local file.  The local file containing the actual
+ * configuration should not be checked into source control.
+ */
+
 nconf.env().argv().file('config.json');
 
 const config = {

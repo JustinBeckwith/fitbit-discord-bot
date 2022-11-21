@@ -1,11 +1,11 @@
-FROM node:18 AS builder
+FROM node:19 AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:18
+FROM node:19
 WORKDIR /app
 COPY package* ./
 RUN npm ci --production

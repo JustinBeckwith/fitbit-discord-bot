@@ -1,3 +1,4 @@
+import { request } from 'gaxios';
 import { DUMP_COMMAND } from '../commands.js';
 import config from '../config.js';
 
@@ -25,16 +26,12 @@ export async function registerGuildCommands() {
     );
   }
   const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/guilds/${config.DISCORD_TEST_GUILD_ID}/commands`;
-  const res = await registerCommands(url);
-  const json = await res.json();
+  const json = await registerCommands(url);
   console.log(json);
   json.forEach(async (cmd) => {
-    const response = await fetch(
-      `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/guilds/${config.DISCORD_TEST_GUILD_ID}/commands/${cmd.id}`
-    );
-    if (!response.ok) {
-      console.error(`Problem removing command ${cmd.id}`);
-    }
+    await request({
+      url: `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/guilds/${config.DISCORD_TEST_GUILD_ID}/commands/${cmd.id}`,
+    });
   });
 }
 
@@ -47,8 +44,15 @@ async function registerGlobalCommands() {
   await registerCommands(url);
 }
 
+type CommandsResponse = [
+  {
+    id: string;
+  }
+];
+
 async function registerCommands(url) {
-  const response = await fetch(url, {
+  const res = await request<CommandsResponse>({
+    url,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bot ${config.DISCORD_TOKEN}`,
@@ -56,15 +60,8 @@ async function registerCommands(url) {
     method: 'PUT',
     body: JSON.stringify([DUMP_COMMAND]),
   });
-
-  if (response.ok) {
-    console.log('Registered all commands');
-  } else {
-    console.error('Error registering commands');
-    const text = await response.text();
-    console.error(text);
-  }
-  return response;
+  console.log('Registered all commands');
+  return res.data;
 }
 
 await registerGlobalCommands();

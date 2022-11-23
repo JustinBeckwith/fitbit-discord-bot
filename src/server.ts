@@ -10,6 +10,7 @@ import { DUMP_COMMAND } from './commands.js';
 import config from './config.js';
 import * as fitbit from './fitbit.js';
 import * as discord from './discord.js';
+import { updateMetadata } from './common.js';
 
 /**
  * Main HTTP server used for the bot.
@@ -82,30 +83,35 @@ app.get('/verified-role', async (req, res) => {
  * 4. Generates an OAuth2 consent dialog url for Fitbit, and redirects the user.
  */
 app.get('/discord-oauth-callback', async (req, res) => {
-  // 1. Uses the code to acquire Discord OAuth2 tokens
-  const code = req.query['code'] as string;
-  const tokens = await discord.getOAuthTokens(code);
+  try {
+    // 1. Uses the code to acquire Discord OAuth2 tokens
+    const code = req.query['code'] as string;
+    const tokens = await discord.getOAuthTokens(code);
 
-  // 2. Uses the Discord Access Token to fetch the user profile
-  const meData = await discord.getUserData(tokens);
-  const userId = meData.user.id;
-  await storage.storeDiscordTokens(userId, {
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: Date.now() + tokens.expires_in * 1000,
-  });
+    // 2. Uses the Discord Access Token to fetch the user profile
+    const meData = await discord.getUserData(tokens);
+    const userId = meData.user.id;
+    await storage.storeDiscordTokens(userId, {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: Date.now() + tokens.expires_in * 1000,
+    });
 
-  // start the fitbit OAuth2 flow by generating a new OAuth2 Url
-  const { url, codeVerifier, state } = fitbit.getOAuthUrl();
+    // start the fitbit OAuth2 flow by generating a new OAuth2 Url
+    const { url, codeVerifier, state } = fitbit.getOAuthUrl();
 
-  // store the code verifier and state arguments required by the fitbit url
-  await storage.storeDiscordStateData(state, {
-    discordUserId: userId,
-    codeVerifier,
-  });
+    // store the code verifier and state arguments required by the fitbit url
+    await storage.storeDiscordStateData(state, {
+      discordUserId: userId,
+      codeVerifier,
+    });
 
-  // send the user to the fitbit OAuth2 consent dialog screen
-  res.redirect(url);
+    // send the user to the fitbit OAuth2 consent dialog screen
+    res.redirect(url);
+  } catch (e) {
+    console.error(e);
+    res.sendStatus(500);
+  }
 });
 
 /**
@@ -118,33 +124,38 @@ app.get('/discord-oauth-callback', async (req, res) => {
  * 5. Fetch Fitbit profile metadata, and push it to the Discord metadata service
  */
 app.get('/fitbit-oauth-callback', async (req, res) => {
-  // 1. Use the state in the querystring to fetch the code verifier and challenge
-  const state = req.query['state'] as string;
-  const { discordUserId, codeVerifier } = await storage.getDiscordStateData(
-    state
-  );
-  // 2. Use the code in the querystring to acquire Fitbit OAuth2 tokens
-  const code = req.query['code'] as string;
-  const tokens = await fitbit.getOAuthTokens(code, codeVerifier);
+  try {
+    // 1. Use the state in the querystring to fetch the code verifier and challenge
+    const state = req.query['state'] as string;
+    const { discordUserId, codeVerifier } = await storage.getDiscordStateData(
+      state
+    );
+    // 2. Use the code in the querystring to acquire Fitbit OAuth2 tokens
+    const code = req.query['code'] as string;
+    const tokens = await fitbit.getOAuthTokens(code, codeVerifier);
 
-  // 3. Store the Fitbit tokens in redis / Firestore
-  const userId = tokens.user_id;
-  const data = {
-    discord_user_id: discordUserId,
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: Date.now() + tokens.expires_in * 1000,
-    code_verifier: codeVerifier,
-  };
-  await storage.storeFitbitTokens(userId, data);
+    // 3. Store the Fitbit tokens in redis / Firestore
+    const userId = tokens.user_id;
+    const data = {
+      discord_user_id: discordUserId,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: Date.now() + tokens.expires_in * 1000,
+      code_verifier: codeVerifier,
+    };
+    await storage.storeFitbitTokens(userId, data);
 
-  // 4. Create a new subscription to ensure webhook events are sent for the current user
-  await fitbit.createSubscription(userId, data);
+    // 4. Create a new subscription to ensure webhook events are sent for the current user
+    await fitbit.createSubscription(userId, data);
 
-  // 5. Fetch Fitbit profile metadata, and push it to the Discord metadata service
-  await updateMetadata(userId);
+    // 5. Fetch Fitbit profile metadata, and push it to the Discord metadata service
+    await updateMetadata(userId);
 
-  res.send('You did it!  Now go back to Discord.');
+    res.send('You did it!  Now go back to Discord.');
+  } catch (e) {
+    console.error(e);
+    res.sendStatus(500);
+  }
 });
 
 /**
@@ -172,40 +183,19 @@ app.get('/fitbit-webhook', async (req, res) => {
  * 2. Fetch the user profile data from Fitbit and send it to Discord
  */
 app.post('/fitbit-webhook', async (req, res) => {
-  const body = req.body as fitbit.WebhookBody;
+  try {
+    const body = req.body as fitbit.WebhookBody;
 
-  // 1. Fetch the Discord and Fitbit tokens from storage (redis / firestore)
-  const userId = body.ownerId;
-  await updateMetadata(userId);
+    // 1. Fetch the Discord and Fitbit tokens from storage (redis / firestore)
+    const userId = body.ownerId;
+    await updateMetadata(userId);
 
-  // 2. Fetch the user profile data from Fitbit, and push it to Discord
-  res.sendStatus(204);
+    // 2. Fetch the user profile data from Fitbit, and push it to Discord
+    res.sendStatus(204);
+  } catch (e) {
+    res.sendStatus(500);
+  }
 });
-
-/**
- * Shared utility function. For a given Fitbit UserId, fetch profile metadata,
- * transform it, and push it to the Discord metadata endpoint.
- */
-async function updateMetadata(userId: string) {
-  const fitbitTokens = await storage.getFitbitTokens(userId);
-  const discordTokens = await storage.getDiscordTokens(
-    fitbitTokens.discord_user_id
-  );
-
-  // Fetch the user profile data from Fitbit
-  const profile = await fitbit.getProfile(userId, fitbitTokens);
-
-  // Transform the data from the profile, and grab only the bits of data used by Discord.
-  const metadata = {
-    averagedailysteps: profile.user.averageDailySteps,
-    ambassador: profile.user.ambassador,
-    membersince: profile.user.memberSince,
-    iscoach: profile.user.isCoach,
-  };
-
-  // Push the data to Discord.
-  await discord.pushMetadata(userId, discordTokens, metadata);
-}
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {

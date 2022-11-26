@@ -6,8 +6,8 @@ import {
   InteractionType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import storage from './storage.js';
-import { DUMP_COMMAND } from './commands.js';
+import * as storage from './storage.js';
+import { DISCONNECT, DUMP_COMMAND } from './commands.js';
 import config from './config.js';
 import * as fitbit from './fitbit.js';
 import * as discord from './discord.js';
@@ -43,6 +43,41 @@ app.post(
     } else if (message.type === InteractionType.APPLICATION_COMMAND) {
       console.log(`Handling application command: ${message.data.name}`);
       switch (message.data.name.toLowerCase()) {
+        /**
+         * DISCONNECT
+         * Revokes all tokens to both Discord and Fitbit, while clearing out
+         * all associated data:
+         * 1. Push empty Metadata to Discord to null out the verified role
+         * 2. Revoke Discord OAuth2 tokens
+         * 3. Fetch the Fitbit UserId using the Discord UserId
+         * 4. Revoke Fitbit OAuth2 tokens
+         * 5. Let the user know the slash command worked
+         */
+        case DISCONNECT.name.toLowerCase(): {
+          const userId = message.member.user.id;
+          const discordTokens = await storage.getDiscordTokens(userId);
+
+          // 1. Push empty Metadata to Discord to null out the verified role
+          await discord.pushMetadata(userId, discordTokens, {});
+
+          // 2. Revoke Discord OAuth2 tokens
+          await discord.revokeAccess(userId);
+
+          // 3. Fetch the Fitbit UserId using the Discord UserId
+          const fitbitUserId = await storage.getLinkedFitbitUserId(userId);
+
+          // 4. Revoke Fitbit OAuth2 tokens
+          await fitbit.revokeAccess(fitbitUserId);
+
+          // 5. Let the user know the slash command worked
+          response.status(204).send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: '👍',
+            },
+          });
+          break;
+        }
         case DUMP_COMMAND.name.toLowerCase(): {
           const dump = await fitbit.getDump();
           response.status(200).send({
@@ -72,7 +107,13 @@ app.post(
  */
 app.get('/verified-role', async (req, res) => {
   const { url, state } = discord.getOAuthUrl();
+
+  // Store the signed state param in the user's cookies so we can verify
+  // the value later. See:
+  // https://discord.com/developers/docs/topics/oauth2#state-and-security
   res.cookie('clientState', state, { maxAge: 1000 * 60 * 5, signed: true });
+
+  // Send the user to the Discord owned OAuth2 authorization endpoint
   res.redirect(url);
 });
 
@@ -161,6 +202,8 @@ app.get('/fitbit-oauth-callback', async (req, res) => {
 
     // 5. Fetch Fitbit profile metadata, and push it to the Discord metadata service
     await updateMetadata(userId);
+
+    await storage.setLinkedFitbitUserId(discordUserId, userId);
 
     res.send('You did it!  Now go back to Discord.');
   } catch (e) {

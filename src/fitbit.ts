@@ -1,7 +1,7 @@
 import config from './config.js';
 import crypto from 'crypto';
 import { request } from 'gaxios';
-import storage, { FitbitData } from './storage.js';
+import * as storage from './storage.js';
 
 /**
  * Code specific to communicating with the Fitbit API.
@@ -203,7 +203,7 @@ export async function getOAuthTokens(code: string, codeVerifier: string) {
  *
  * See https://dev.fitbit.com/build/reference/web-api/authorization/refresh-token/.
  */
-async function getAccessToken(userId: string, data: FitbitData) {
+async function getAccessToken(userId: string, data: storage.FitbitData) {
   if (Date.now() > data.expires_at) {
     console.log('token expired, fetching a newsy one');
     const url = 'https://api.fitbit.com/oauth2/token';
@@ -233,12 +233,45 @@ async function getAccessToken(userId: string, data: FitbitData) {
   return data.access_token;
 }
 
+/**
+ * Revoke the given user's Fitbit refresh token.
+ * See https://dev.fitbit.com/build/reference/web-api/authorization/revoke-token.
+ * @param userId The Fitbit User ID
+ */
+export async function revokeAccess(userId: string) {
+  const url = 'https://api.fitbit.com/oauth2/revoke';
+  const tokens = await storage.getFitbitTokens(userId);
+  const accessToken = await getAccessToken(userId, tokens);
+
+  // Revoke the refresh token. It would appear that revoking the refresh token
+  // also revokes all associated access tokens for this implementation of the
+  // OAuth2 API.
+  await request({
+    url,
+    method: 'POST',
+    body: new URLSearchParams({
+      client_id: config.FITBIT_CLIENT_ID,
+      token: tokens.refresh_token,
+    }),
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  });
+
+  // remove the tokens from storage
+  await storage.deleteFitbitTokens(userId);
+}
+
 /*
  * Each user registration requires the setup of a single subscription which
  * enables webhook delivery for that user.
  * See https://dev.fitbit.com/build/reference/web-api/subscription/create-subscription/.
  */
-export async function createSubscription(userId: string, data: FitbitData) {
+export async function createSubscription(
+  userId: string,
+  data: storage.FitbitData
+) {
   // POST /1/user/[user-id]/[collection-path]/apiSubscriptions/[subscription-id].json
   const url = `https://api.fitbit.com/1/user/-/apiSubscriptions/${data.discord_user_id}.json`;
   const token = await getAccessToken(userId, data);
@@ -254,7 +287,10 @@ export async function createSubscription(userId: string, data: FitbitData) {
 /**
  * List all available subscriptions for the given user.
  */
-export async function listSubscriptions(userId: string, data: FitbitData) {
+export async function listSubscriptions(
+  userId: string,
+  data: storage.FitbitData
+) {
   // GET /1/user/[user-id]/[collection-path]/apiSubscriptions.json
   const url = 'https://api.fitbit.com/1/user/-/apiSubscriptions.json';
   const token = await getAccessToken(userId, data);
@@ -270,7 +306,7 @@ export async function listSubscriptions(userId: string, data: FitbitData) {
 /**
  * Fetch the user profile for the current user.
  */
-export async function getProfile(userId: string, data: FitbitData) {
+export async function getProfile(userId: string, data: storage.FitbitData) {
   // /1/user/[user-id]/profile.json
   const url = `https://api.fitbit.com/1/user/-/profile.json`;
   const token = await getAccessToken(userId, data);

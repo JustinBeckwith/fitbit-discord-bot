@@ -1,5 +1,5 @@
 import * as discord from '../discord.js';
-import storage from '../storage.js';
+import * as storage from '../storage.js';
 
 /**
  * Fetch the current weight metadata.

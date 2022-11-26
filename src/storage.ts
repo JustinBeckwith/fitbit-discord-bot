@@ -7,19 +7,17 @@ import config from './config.js';
  * expiration times to ensure the bot service can continue to make authenticated
  * calls to Fitbit and Discord on behalf of a given user. This file provides two
  * example implementations: one in Redis, and one in Google Cloud Firestore.
- * You can control which provider is used by modifying `config.json`.
+ * You can control which provider is used by modifying `config.json`. The
+ * valid settings are `redis` and `firestore`.
  */
 
 /**
  * Shared interface for both storage providers.
  */
 export interface StorageProvider {
-  storeDiscordTokens(userId: string, data: DiscordData): Promise<void>;
-  getDiscordTokens(userId: string): Promise<DiscordData>;
-  storeFitbitTokens(userId: string, data: FitbitData);
-  getFitbitTokens(userId: string): Promise<FitbitData>;
-  storeStateData(state: string, data: StateData): Promise<void>;
-  getStateData(state: string): Promise<StateData>;
+  setData(key: string, value: unknown, ttlSeconds?: number): Promise<void>;
+  getData<T>(key: string): Promise<T>;
+  deleteData(key: string): Promise<void>;
 }
 
 export interface DiscordData {
@@ -40,6 +38,53 @@ interface StateData {
   codeVerifier: string;
   discordUserId: string;
   ttl?: Timestamp;
+}
+
+export async function storeDiscordTokens(userId: string, data: DiscordData) {
+  await client.setData(`discord-${userId}`, data);
+}
+
+export async function getDiscordTokens(userId: string) {
+  const data = await client.getData<DiscordData>(`discord-${userId}`);
+  return data;
+}
+
+export async function storeFitbitTokens(userId: string, data: FitbitData) {
+  await client.setData(`fitbit-${userId}`, data);
+}
+
+export async function getFitbitTokens(userId: string) {
+  const data = await client.getData<FitbitData>(`fitbit-${userId}`);
+  return data;
+}
+
+export async function storeStateData(state: string, data: StateData) {
+  await client.setData(`state-${state}`, data, 60);
+}
+
+export async function getStateData(state: string) {
+  const data = await client.getData<StateData>(`state-${state}`);
+  return data;
+}
+
+export async function deleteDiscordTokens(userId: string) {
+  await client.deleteData(`discord-${userId}`);
+}
+
+export async function deleteFitbitTokens(userId: string) {
+  await client.deleteData(`fitbit-${userId}`);
+}
+
+export async function getLinkedFitbitUserId(discordUserId: string) {
+  const data = await client.getData<string>(`discord-link-${discordUserId}`);
+  return data;
+}
+
+export async function setLinkedFitbitUserId(
+  discordUserId: string,
+  fitbitUserId: string
+) {
+  await client.setData(`discord-link-${discordUserId}`, fitbitUserId);
 }
 
 /**
@@ -63,37 +108,21 @@ export class RedisClient implements StorageProvider {
     return this._client;
   }
 
-  async storeDiscordTokens(userId: string, data: DiscordData) {
+  async setData(key: string, data: unknown, ttlSeconds?: number) {
     const client = await this.getClient();
-    await client.set(`discord-${userId}`, JSON.stringify(data));
+    const options = ttlSeconds ? { EX: ttlSeconds } : undefined;
+    await client.set(key, JSON.stringify(data), options);
   }
 
-  async getDiscordTokens(userId: string) {
+  async getData<T>(key: string) {
     const client = await this.getClient();
-    const data = await client.get(`discord-${userId}`);
-    return JSON.parse(data) as DiscordData;
+    const data = await client.get(key);
+    return JSON.parse(data) as T;
   }
 
-  async storeFitbitTokens(userId: string, data: FitbitData) {
+  async deleteData(key: string) {
     const client = await this.getClient();
-    await client.set(`fitbit-${userId}`, JSON.stringify(data));
-  }
-
-  async getFitbitTokens(userId: string) {
-    const client = await this.getClient();
-    const data = await client.get(`fitbit-${userId}`);
-    return JSON.parse(data) as FitbitData;
-  }
-
-  async storeStateData(state: string, data: StateData) {
-    const client = await this.getClient();
-    await client.set(`state-${state}`, JSON.stringify(data), { EX: 60 });
-  }
-
-  async getStateData(state: string) {
-    const client = await this.getClient();
-    const data = await client.get(`state-${state}`);
-    return JSON.parse(data) as StateData;
+    await client.del(key);
   }
 }
 
@@ -106,34 +135,21 @@ export class FirestoreClient implements StorageProvider {
   private db = new Firestore();
   private tbl = this.db.collection('fitbit');
 
-  async storeDiscordTokens(userId: string, data: DiscordData) {
-    await this.tbl.doc(`discord-${userId}`).set(data);
+  async setData(key: string, data: unknown, ttlSeconds?: number) {
+    if (ttlSeconds) {
+      const seconds = Math.floor(Date.now() / 1000) + ttlSeconds;
+      (data as { ttl: Timestamp }).ttl = new Timestamp(seconds, 0);
+    }
+    await this.tbl.doc(key).set(data);
   }
 
-  async getDiscordTokens(userId: string) {
-    const doc = await this.tbl.doc(`discord-${userId}`).get();
-    return doc.data() as DiscordData;
+  async getData<T>(key: string) {
+    const doc = await this.tbl.doc(key).get();
+    return doc.data() as T;
   }
 
-  async storeFitbitTokens(userId: string, data: FitbitData) {
-    await this.tbl.doc(`fitbit-${userId}`).set(data);
-  }
-
-  async getFitbitTokens(userId: string) {
-    const doc = await this.tbl.doc(`fitbit-${userId}`).get();
-    return doc.data() as FitbitData;
-  }
-
-  async storeStateData(state: string, data: StateData) {
-    // configure the TTL for an hour
-    const seconds = Math.floor(Date.now() / 1000 + 60 * 60);
-    data.ttl = new Timestamp(seconds, 0);
-    await this.tbl.doc(`state-${state}`).set(data);
-  }
-
-  async getStateData(state: string) {
-    const doc = await this.tbl.doc(`state-${state}`).get();
-    return doc.data() as StateData;
+  async deleteData(key: string) {
+    await this.tbl.doc(key).delete();
   }
 }
 
@@ -143,5 +159,3 @@ if (config.DATABASE_TYPE === 'firestore') {
 } else {
   client = new RedisClient();
 }
-
-export default client;

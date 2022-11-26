@@ -1,7 +1,7 @@
 import util from 'util';
 import crypto from 'crypto';
 import config from './config.js';
-import storage, { DiscordData } from './storage.js';
+import * as storage from './storage.js';
 import { request, GaxiosError } from 'gaxios';
 
 /**
@@ -96,7 +96,10 @@ export async function getOAuthTokens(
  * token.  Check if the access token has expired, and if it has, use the
  * refresh token to acquire a new, fresh access token.
  */
-export async function getAccessToken(userId: string, data: DiscordData) {
+export async function getAccessToken(
+  userId: string,
+  data: storage.DiscordData
+) {
   if (Date.now() > data.expires_at) {
     const url = 'https://discord.com/api/v10/oauth2/token';
     const body = new URLSearchParams({
@@ -123,6 +126,33 @@ export async function getAccessToken(userId: string, data: DiscordData) {
 }
 
 /**
+ * Revoke the given user's Discord access and refresh tokens.
+ * @param userId The Discord User ID
+ */
+export async function revokeAccess(userId: string) {
+  const url = 'https://discord.com/api/oauth2/token/revoke';
+  const tokens = await storage.getDiscordTokens(userId);
+
+  // revoke the refresh token
+  await request({
+    url,
+    method: 'POST',
+    body: new URLSearchParams({
+      client_id: config.DISCORD_CLIENT_ID,
+      client_secret: config.DISCORD_CLIENT_SECRET,
+      token: tokens.refresh_token,
+      token_type_hint: 'refresh_token',
+    }),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  });
+
+  // remove the tokens from storage
+  await storage.deleteDiscordTokens(userId);
+}
+
+/**
  * Given a user based access token, fetch profile information for the current user.
  */
 export async function getUserData(tokens: OAuth2TokenResponse) {
@@ -142,7 +172,7 @@ export async function getUserData(tokens: OAuth2TokenResponse) {
  */
 export async function pushMetadata(
   userId: string,
-  data: DiscordData,
+  data: storage.DiscordData,
   metadata: Record<string, string>
 ) {
   // GET/PUT /users/@me/applications/:id/role-connection
@@ -174,7 +204,7 @@ export async function pushMetadata(
  * Fetch the metadata currently pushed to Discord for the currently logged
  * in user, for this specific bot.
  */
-export async function getMetadata(userId: string, data: DiscordData) {
+export async function getMetadata(userId: string, data: storage.DiscordData) {
   // GET/PUT /users/@me/applications/:id/role-connection
   const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
   const accessToken = await getAccessToken(userId, data);

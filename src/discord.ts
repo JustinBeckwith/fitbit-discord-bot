@@ -1,4 +1,5 @@
 import util from 'util';
+import crypto from 'crypto';
 import config from './config.js';
 import storage, { DiscordData } from './storage.js';
 import { request, GaxiosError } from 'gaxios';
@@ -50,14 +51,17 @@ export interface OAuth2UserInfo {
  * Generate the url which the user will be directed to in order to approve the
  * bot, and see the list of requested scopes.
  */
-export function getOAuthUrl(): string {
+export function getOAuthUrl() {
+  const state = crypto.randomUUID();
+
   const url = new URL('https://discord.com/api/oauth2/authorize');
   url.searchParams.set('client_id', config.DISCORD_CLIENT_ID);
   url.searchParams.set('redirect_uri', config.DISCORD_REDIRECT_URI);
   url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', state);
   url.searchParams.set('scope', 'role_connections.write identify');
   url.searchParams.set('prompt', 'consent');
-  return url.toString();
+  return { state, url: url.toString() };
 }
 
 /**

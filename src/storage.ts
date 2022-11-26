@@ -18,8 +18,8 @@ export interface StorageProvider {
   getDiscordTokens(userId: string): Promise<DiscordData>;
   storeFitbitTokens(userId: string, data: FitbitData);
   getFitbitTokens(userId: string): Promise<FitbitData>;
-  storeDiscordStateData(state: string, data: StateData): Promise<void>;
-  getDiscordStateData(state: string): Promise<StateData>;
+  storeStateData(state: string, data: StateData): Promise<void>;
+  getStateData(state: string): Promise<StateData>;
 }
 
 export interface DiscordData {
@@ -85,12 +85,12 @@ export class RedisClient implements StorageProvider {
     return JSON.parse(data) as FitbitData;
   }
 
-  async storeDiscordStateData(state: string, data: StateData) {
+  async storeStateData(state: string, data: StateData) {
     const client = await this.getClient();
     await client.set(`state-${state}`, JSON.stringify(data), { EX: 60 });
   }
 
-  async getDiscordStateData(state: string) {
+  async getStateData(state: string) {
     const client = await this.getClient();
     const data = await client.get(`state-${state}`);
     return JSON.parse(data) as StateData;
@@ -124,14 +124,14 @@ export class FirestoreClient implements StorageProvider {
     return doc.data() as FitbitData;
   }
 
-  async storeDiscordStateData(state: string, data: StateData) {
+  async storeStateData(state: string, data: StateData) {
     // configure the TTL for an hour
     const seconds = Math.floor(Date.now() / 1000 + 60 * 60);
     data.ttl = new Timestamp(seconds, 0);
     await this.tbl.doc(`state-${state}`).set(data);
   }
 
-  async getDiscordStateData(state: string) {
+  async getStateData(state: string) {
     const doc = await this.tbl.doc(`state-${state}`).get();
     return doc.data() as StateData;
   }

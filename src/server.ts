@@ -1,5 +1,6 @@
 import express from 'express';
 import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
 import {
   InteractionResponseType,
   InteractionType,
@@ -18,6 +19,7 @@ import { updateMetadata } from './common.js';
 
 const app = express();
 app.use(bodyParser.json());
+app.use(cookieParser(config.COOKIE_SECRET));
 
 app.get('/', (req, res) => {
   // Just a happy little route to show our server is up.
@@ -69,7 +71,8 @@ app.post(
  * consent dialog url for Discord, and send the user there.
  */
 app.get('/verified-role', async (req, res) => {
-  const url = discord.getOAuthUrl();
+  const { url, state } = discord.getOAuthUrl();
+  res.cookie('clientState', state, { maxAge: 1000 * 60 * 5, signed: true });
   res.redirect(url);
 });
 
@@ -84,8 +87,17 @@ app.get('/verified-role', async (req, res) => {
  */
 app.get('/discord-oauth-callback', async (req, res) => {
   try {
-    // 1. Uses the code to acquire Discord OAuth2 tokens
+    // 1. Uses the code and state to acquire Discord OAuth2 tokens
     const code = req.query['code'] as string;
+    const discordState = req.query['state'] as string;
+
+    // make sure the state parameter exists
+    const { clientState } = req.signedCookies;
+    if (clientState !== discordState) {
+      console.error('State verification failed.');
+      return res.sendStatus(403);
+    }
+
     const tokens = await discord.getOAuthTokens(code);
 
     // 2. Uses the Discord Access Token to fetch the user profile
@@ -101,7 +113,7 @@ app.get('/discord-oauth-callback', async (req, res) => {
     const { url, codeVerifier, state } = fitbit.getOAuthUrl();
 
     // store the code verifier and state arguments required by the fitbit url
-    await storage.storeDiscordStateData(state, {
+    await storage.storeStateData(state, {
       discordUserId: userId,
       codeVerifier,
     });
@@ -127,9 +139,8 @@ app.get('/fitbit-oauth-callback', async (req, res) => {
   try {
     // 1. Use the state in the querystring to fetch the code verifier and challenge
     const state = req.query['state'] as string;
-    const { discordUserId, codeVerifier } = await storage.getDiscordStateData(
-      state
-    );
+    const { discordUserId, codeVerifier } = await storage.getStateData(state);
+
     // 2. Use the code in the querystring to acquire Fitbit OAuth2 tokens
     const code = req.query['code'] as string;
     const tokens = await fitbit.getOAuthTokens(code, codeVerifier);

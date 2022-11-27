@@ -7,7 +7,7 @@ import {
   verifyKeyMiddleware,
 } from 'discord-interactions';
 import * as storage from './storage.js';
-import { DISCONNECT, DUMP_COMMAND } from './commands.js';
+import { DISCONNECT, GET_PROFILE } from './commands.js';
 import config from './config.js';
 import * as fitbit from './fitbit.js';
 import * as discord from './discord.js';
@@ -55,35 +55,68 @@ app.post(
          */
         case DISCONNECT.name.toLowerCase(): {
           const userId = message.member.user.id;
+          let cleanedUp = false;
           const discordTokens = await storage.getDiscordTokens(userId);
 
-          // 1. Push empty Metadata to Discord to null out the verified role
-          await discord.pushMetadata(userId, discordTokens, {});
+          if (discordTokens) {
+            cleanedUp = true;
 
-          // 2. Revoke Discord OAuth2 tokens
-          await discord.revokeAccess(userId);
+            // 1. Push empty Metadata to Discord to null out the verified role
+            await discord.pushMetadata(userId, discordTokens, {});
+
+            // 2. Revoke Discord OAuth2 tokens
+            await discord.revokeAccess(userId);
+          }
 
           // 3. Fetch the Fitbit UserId using the Discord UserId
           const fitbitUserId = await storage.getLinkedFitbitUserId(userId);
+          if (fitbitUserId) {
+            cleanedUp = true;
 
-          // 4. Revoke Fitbit OAuth2 tokens
-          await fitbit.revokeAccess(fitbitUserId);
+            // 4. Revoke Fitbit OAuth2 tokens
+            await fitbit.revokeAccess(fitbitUserId);
+            await storage.deleteLinkedFitbitUser(userId);
+          }
 
           // 5. Let the user know the slash command worked
-          response.status(204).send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              content: '👍',
-            },
-          });
+          if (cleanedUp) {
+            response.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content: 'Fitbit account disconnected.',
+              },
+            });
+          } else {
+            sendNoConnectionFound(response);
+          }
           break;
         }
-        case DUMP_COMMAND.name.toLowerCase(): {
-          const dump = await fitbit.getDump();
-          response.status(200).send({
+        case GET_PROFILE.name.toLowerCase(): {
+          /**
+           * GET PROFILE
+           * If the user has a linked Fitbit account, fetch the profile data.
+           */
+          const userId = message.member.user.id;
+          const fitbitUserId = await storage.getLinkedFitbitUserId(userId);
+          if (!fitbitUserId) {
+            return sendNoConnectionFound(response);
+          }
+
+          const fitbitTokens = await storage.getFitbitTokens(fitbitUserId);
+          if (!fitbitTokens) {
+            return sendNoConnectionFound(response);
+          }
+          const profile = await fitbit.getProfile(fitbitUserId, fitbitTokens);
+          const metadata = {
+            averagedailysteps: profile.user.averageDailySteps,
+            ambassador: profile.user.ambassador,
+            membersince: profile.user.memberSince,
+            iscoach: profile.user.isCoach,
+          };
+          response.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              content: dump,
+              content: '```' + JSON.stringify(metadata) + '```',
             },
           });
           break;
@@ -250,6 +283,15 @@ app.post('/fitbit-webhook', async (req, res) => {
     res.sendStatus(500);
   }
 });
+
+function sendNoConnectionFound(response) {
+  return response.send({
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content: `🥴 no Fitbit connection info found.  Visit ${config.VERIFICATION_URL} to set it up.`,
+    },
+  });
+}
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {

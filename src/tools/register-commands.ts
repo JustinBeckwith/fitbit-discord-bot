@@ -1,5 +1,5 @@
 import { request } from 'gaxios';
-import { DISCONNECT, DUMP_COMMAND } from '../commands.js';
+import { DISCONNECT, GET_PROFILE } from '../commands.js';
 import config from '../config.js';
 
 /**
@@ -58,7 +58,7 @@ async function registerCommands(url) {
       Authorization: `Bot ${config.DISCORD_TOKEN}`,
     },
     method: 'PUT',
-    body: JSON.stringify([DUMP_COMMAND, DISCONNECT]),
+    body: JSON.stringify([GET_PROFILE, DISCONNECT]),
   });
   console.log('Registered all commands');
   return res.data;

@@ -87,6 +87,10 @@ export async function setLinkedFitbitUserId(
   await client.setData(`discord-link-${discordUserId}`, fitbitUserId);
 }
 
+export async function deleteLinkedFitbitUser(discordUserId: string) {
+  await client.deleteData(`discord-link-${discordUserId}`);
+}
+
 /**
  * Redis storage provider.  Very nice when developing locally with Redis.
  */

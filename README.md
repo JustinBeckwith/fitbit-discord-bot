@@ -15,7 +15,8 @@ Create a file called `config.json`:
   "FITBIT_REDIRECT_URI": "http://localhost:3000/fitbit-oauth-callback",
   "FITBIT_SUBSCRIBER_VERIFY": "...",
   "DATABASE_TYPE": "redis",
-  "COOKIE_SECRET": "..."
+  "COOKIE_SECRET": "...",
+  "VERIFICATION_URL": "http://localhost:3000/verified-role"
 }
 ```
 

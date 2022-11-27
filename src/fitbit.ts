@@ -110,13 +110,6 @@ export interface ProfileData {
 }
 
 /**
- * Placeholder result for the slash command.
- */
-export async function getDump() {
-  return 'dump';
-}
-
-/**
  * The following methods all facilitate OAuth2 communication with Fitbit.
  * See https://dev.fitbit.com/build/reference/web-api/developer-guide/authorization/
  * for more details.
@@ -240,24 +233,31 @@ async function getAccessToken(userId: string, data: storage.FitbitData) {
  */
 export async function revokeAccess(userId: string) {
   const url = 'https://api.fitbit.com/oauth2/revoke';
-  const tokens = await storage.getFitbitTokens(userId);
-  const accessToken = await getAccessToken(userId, tokens);
 
   // Revoke the refresh token. It would appear that revoking the refresh token
   // also revokes all associated access tokens for this implementation of the
   // OAuth2 API.
-  await request({
-    url,
-    method: 'POST',
-    body: new URLSearchParams({
-      client_id: config.FITBIT_CLIENT_ID,
-      token: tokens.refresh_token,
-    }),
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-  });
+  try {
+    const tokens = await storage.getFitbitTokens(userId);
+    const accessToken = await getAccessToken(userId, tokens);
+
+    await request({
+      url,
+      method: 'POST',
+      body: new URLSearchParams({
+        client_id: config.FITBIT_CLIENT_ID,
+        token: tokens.refresh_token,
+      }),
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+  } catch (e) {
+    // if revoking the token fails, remove the tokens from our storage and
+    // move on.
+    console.error(e);
+  }
 
   // remove the tokens from storage
   await storage.deleteFitbitTokens(userId);

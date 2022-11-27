@@ -8,7 +8,7 @@ export const DISCONNECT = {
   description: 'Clear all associated Fitbit data and disconnect your account.',
 };
 
-export const DUMP_COMMAND = {
-  name: 'dump',
-  description: 'do a dump of fitbit related data for the linked user',
+export const GET_PROFILE = {
+  name: 'get-profile',
+  description: 'Fetch the linked Fitbit account profile information.',
 };

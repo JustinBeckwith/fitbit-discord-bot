@@ -21,6 +21,7 @@ const config = {
   FITBIT_SUBSCRIBER_VERIFY: nconf.get('FITBIT_SUBSCRIBER_VERIFY') as string,
   DATABASE_TYPE: nconf.get('DATABASE_TYPE') as string,
   COOKIE_SECRET: nconf.get('COOKIE_SECRET') as string,
+  VERIFICATION_URL: nconf.get('VERIFICATION_URL') as string,
 };
 
 export default config;

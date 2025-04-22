@@ -4,11 +4,11 @@
  */
 
 export const DISCONNECT = {
-  name: 'disconnect',
-  description: 'Clear all associated Fitbit data and disconnect your account.',
+	name: 'disconnect',
+	description: 'Clear all associated Fitbit data and disconnect your account.',
 };
 
 export const GET_PROFILE = {
-  name: 'get-profile',
-  description: 'Fetch the linked Fitbit account profile information.',
+	name: 'get-profile',
+	description: 'Fetch the linked Fitbit account profile information.',
 };

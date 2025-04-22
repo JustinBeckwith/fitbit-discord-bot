@@ -6,7 +6,7 @@ import { updateMetadata } from '../common.js';
 
 const [userId] = process.argv.slice(2);
 if (!userId) {
-  throw Error('Fitbit UserID required.');
+	throw Error('Fitbit UserID required.');
 }
 await updateMetadata(userId);
 

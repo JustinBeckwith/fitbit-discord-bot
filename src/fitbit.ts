@@ -1,5 +1,4 @@
 import crypto from 'node:crypto';
-import { request } from 'gaxios';
 import config from './config.js';
 import * as storage from './storage.js';
 
@@ -178,15 +177,15 @@ export async function getOAuthTokens(code: string, codeVerifier: string) {
 		code,
 		redirect_uri: config.FITBIT_REDIRECT_URI,
 	});
-	const r = await request<OAuthTokens>({
-		url: 'https://api.fitbit.com/oauth2/token',
+	const r = await fetch('https://api.fitbit.com/oauth2/token', {
 		body: body.toString(),
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
 		},
 	});
-	return r.data;
+	const data = (await r.json()) as OAuthTokens;
+	return data;
 }
 
 /**
@@ -207,8 +206,7 @@ async function getAccessToken(userId: string, data: storage.FitbitData) {
 		const authCode = Buffer.from(
 			`${config.FITBIT_CLIENT_ID}:${config.FITBIT_CLIENT_SECRET}`,
 		).toString('base64');
-		const r = await request<OAuthTokens>({
-			url,
+		const r = await fetch(url, {
 			body,
 			method: 'POST',
 			headers: {
@@ -216,7 +214,7 @@ async function getAccessToken(userId: string, data: storage.FitbitData) {
 				'Content-Type': 'application/x-www-form-urlencoded',
 			},
 		});
-		const tokens = r.data;
+		const tokens = (await r.json()) as OAuthTokens;
 		console.log(`new access token: ${tokens.access_token}`);
 		data.access_token = tokens.access_token;
 		data.expires_at = Date.now() + tokens.expires_in * 1000;
@@ -241,8 +239,7 @@ export async function revokeAccess(userId: string) {
 		const tokens = await storage.getFitbitTokens(userId);
 		const accessToken = await getAccessToken(userId, tokens);
 
-		await request({
-			url,
+		await fetch(url, {
 			method: 'POST',
 			body: new URLSearchParams({
 				client_id: config.FITBIT_CLIENT_ID,
@@ -275,8 +272,7 @@ export async function createSubscription(
 	// POST /1/user/[user-id]/[collection-path]/apiSubscriptions/[subscription-id].json
 	const url = `https://api.fitbit.com/1/user/-/apiSubscriptions/${data.discord_user_id}.json`;
 	const token = await getAccessToken(userId, data);
-	await request({
-		url,
+	await fetch(url, {
 		method: 'POST',
 		headers: {
 			authorization: `Bearer ${token}`,
@@ -294,13 +290,13 @@ export async function listSubscriptions(
 	// GET /1/user/[user-id]/[collection-path]/apiSubscriptions.json
 	const url = 'https://api.fitbit.com/1/user/-/apiSubscriptions.json';
 	const token = await getAccessToken(userId, data);
-	const res = await request({
-		url,
+	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${token}`,
 		},
 	});
-	return res.data;
+	const responseData = await res.json();
+	return responseData;
 }
 
 /**
@@ -310,11 +306,11 @@ export async function getProfile(userId: string, data: storage.FitbitData) {
 	// /1/user/[user-id]/profile.json
 	const url = 'https://api.fitbit.com/1/user/-/profile.json';
 	const token = await getAccessToken(userId, data);
-	const res = await request<ProfileData>({
-		url,
+	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${token}`,
 		},
 	});
-	return res.data;
+	const responseData = (await res.json()) as ProfileData;
+	return responseData;
 }

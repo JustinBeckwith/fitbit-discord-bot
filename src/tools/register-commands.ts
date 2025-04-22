@@ -1,4 +1,3 @@
-import { request } from 'gaxios';
 import { DISCONNECT, GET_PROFILE } from '../commands.js';
 import config from '../config.js';
 
@@ -29,9 +28,9 @@ export async function registerGuildCommands() {
 	const json = await registerCommands(url);
 	console.log(json);
 	for (const cmd of json) {
-		await request({
-			url: `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/guilds/${config.DISCORD_TEST_GUILD_ID}/commands/${cmd.id}`,
-		});
+		await fetch(
+			`https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/guilds/${config.DISCORD_TEST_GUILD_ID}/commands/${cmd.id}`,
+		);
 	}
 }
 
@@ -44,15 +43,8 @@ async function registerGlobalCommands() {
 	await registerCommands(url);
 }
 
-type CommandsResponse = [
-	{
-		id: string;
-	},
-];
-
 async function registerCommands(url) {
-	const res = await request<CommandsResponse>({
-		url,
+	const res = await fetch(url, {
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bot ${config.DISCORD_TOKEN}`,
@@ -61,7 +53,7 @@ async function registerCommands(url) {
 		body: JSON.stringify([GET_PROFILE, DISCONNECT]),
 	});
 	console.log('Registered all commands');
-	return res.data;
+	return res.json();
 }
 
 await registerGlobalCommands();

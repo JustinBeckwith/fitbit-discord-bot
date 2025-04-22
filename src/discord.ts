@@ -1,6 +1,4 @@
 import crypto from 'node:crypto';
-import util from 'node:util';
-import { type GaxiosError, request } from 'gaxios';
 import config from './config.js';
 import * as storage from './storage.js';
 
@@ -80,15 +78,15 @@ export async function getOAuthTokens(
 		redirect_uri: config.DISCORD_REDIRECT_URI,
 	});
 
-	const r = await request<OAuth2TokenResponse>({
-		url,
+	const r = await fetch(url, {
 		body: data,
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
 		},
 	});
-	return r.data;
+	const responseData = (await r.json()) as OAuth2TokenResponse;
+	return responseData;
 }
 
 /**
@@ -108,19 +106,19 @@ export async function getAccessToken(
 			grant_type: 'refresh_token',
 			refresh_token: data.refresh_token,
 		});
-		const r = await request<OAuth2TokenResponse>({
-			url,
+		const r = await fetch(url, {
 			body,
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/x-www-form-urlencoded',
 			},
 		});
-		console.log(`new discord access token: ${r.data.access_token}`);
-		data.access_token = r.data.access_token;
-		data.expires_at = Date.now() + r.data.expires_in * 1000;
+		const responseData = (await r.json()) as OAuth2TokenResponse;
+		console.log(`new discord access token: ${responseData.access_token}`);
+		data.access_token = responseData.access_token;
+		data.expires_at = Date.now() + responseData.expires_in * 1000;
 		await storage.storeDiscordTokens(userId, data);
-		return r.data.access_token;
+		return responseData.access_token;
 	}
 	return data.access_token;
 }
@@ -134,8 +132,7 @@ export async function revokeAccess(userId: string) {
 	const tokens = await storage.getDiscordTokens(userId);
 
 	// revoke the refresh token
-	await request({
-		url,
+	await fetch(url, {
 		method: 'POST',
 		body: new URLSearchParams({
 			client_id: config.DISCORD_CLIENT_ID,
@@ -157,13 +154,13 @@ export async function revokeAccess(userId: string) {
  */
 export async function getUserData(tokens: OAuth2TokenResponse) {
 	const url = 'https://discord.com/api/v10/oauth2/@me';
-	const res = await request<OAuth2UserInfo>({
-		url,
+	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${tokens.access_token}`,
 		},
 	});
-	return res.data;
+	const responseData = (await res.json()) as OAuth2UserInfo;
+	return responseData;
 }
 
 /**
@@ -183,19 +180,16 @@ export async function pushMetadata(
 		metadata,
 	};
 	try {
-		await request({
-			url,
+		await fetch(url, {
 			method: 'PUT',
-			data: body,
+			body: JSON.stringify(body),
 			headers: {
 				Authorization: `Bearer ${accessToken}`,
 				'Content-Type': 'application/json',
 			},
 		});
 	} catch (e) {
-		const err = e as GaxiosError;
 		console.error(e);
-		console.log(util.inspect(err.response?.data, false, 12));
 		throw e;
 	}
 }
@@ -208,13 +202,13 @@ export async function getMetadata(userId: string, data: storage.DiscordData) {
 	// GET/PUT /users/@me/applications/:id/role-connection
 	const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
 	const accessToken = await getAccessToken(userId, data);
-	const res = await request({
-		url,
+	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${accessToken}`,
 		},
 	});
-	return res.data;
+	const responseData = await res.json();
+	return responseData;
 }
 
 /**
@@ -251,8 +245,7 @@ export async function registerMetadataSchema() {
 	];
 
 	try {
-		const res = await request({
-			url,
+		const res = await fetch(url, {
 			method: 'PUT',
 			body: JSON.stringify(body),
 			headers: {
@@ -260,11 +253,10 @@ export async function registerMetadataSchema() {
 				Authorization: `Bot ${config.DISCORD_TOKEN}`,
 			},
 		});
-		return res.data;
+		const responseData = await res.json();
+		return responseData;
 	} catch (e) {
-		const err = e as GaxiosError;
 		console.error(e);
-		console.log(util.inspect(err.response?.data, false, 12));
 		throw e;
 	}
 }
@@ -275,12 +267,12 @@ export async function registerMetadataSchema() {
  */
 export async function getMetadataSchema() {
 	const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
-	const res = await request({
-		url,
+	const res = await fetch(url, {
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bot ${config.DISCORD_TOKEN}`,
 		},
 	});
-	return res.data;
+	const responseData = await res.json();
+	return responseData;
 }

@@ -7,7 +7,7 @@ import * as storage from '../storage.js';
 
 const [userId] = process.argv.slice(2);
 if (!userId) {
-  throw Error('Discord UserID required.');
+	throw Error('Discord UserID required.');
 }
 
 const discordTokens = await storage.getDiscordTokens(userId);

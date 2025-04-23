@@ -15,18 +15,18 @@
     "dev": "wrangler dev --port 3000",
     "build": "tsc",
     "start": "wrangler dev --port 3000",
-    "register": "tsx ./src/discord/tools/register-commands.ts"
+    "register-commands": "tsx ./src/tools/register-commands.ts",
+    "register-metadata-schema": "tsx ./src/tools/register-metadata-schema.ts"
   },
   "dependencies": {
     "discord-interactions": "^4.1.1",
-    "dotenv": "^16.5.0",
     "hono": "^4.7.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@cloudflare/workers-types": "^4.20250423.0",
     "@types/express": "^5.0.1",
-    "@types/node": "^22.14.1",
+    "dotenv": "^16.5.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "wrangler": "^4.13.0"

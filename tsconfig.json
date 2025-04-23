@@ -5,6 +5,7 @@
     "outDir": "build",
     "moduleResolution": "node",
     "sourceMap": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true
   }
 }

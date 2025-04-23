@@ -1,3 +1,4 @@
+import type { Env } from './config.js';
 import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
 import * as storage from './storage.js';
@@ -6,16 +7,17 @@ import * as storage from './storage.js';
  * Shared utility function. For a given Fitbit UserId, fetch profile metadata,
  * transform it, and push it to the Discord metadata endpoint.
  */
-export async function updateMetadata(userId: string) {
-	const fitbitTokens = await storage.getFitbitTokens(userId);
+export async function updateMetadata(userId: string, env: Env) {
+	const fitbitTokens = await storage.getFitbitTokens(env, userId);
 	const discordTokens = await storage.getDiscordTokens(
+		env,
 		fitbitTokens.discord_user_id,
 	);
 
 	// Fetch the user profile data from Fitbit
 	let metadata: Record<string, string>;
 	try {
-		const profile = await fitbit.getProfile(userId, fitbitTokens);
+		const profile = await fitbit.getProfile(userId, fitbitTokens, env);
 		// Transform the data from the profile, and grab only the bits of data used by Discord.
 		metadata = {
 			averagedailysteps: profile.user.averageDailySteps,
@@ -39,5 +41,5 @@ export async function updateMetadata(userId: string) {
 	}
 
 	// Push the data to Discord.
-	await discord.pushMetadata(userId, discordTokens, metadata);
+	await discord.pushMetadata(userId, discordTokens, metadata, env);
 }

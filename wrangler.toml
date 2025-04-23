@@ -1,0 +1,8 @@
+name = "fitbit-discord-bot"
+main = "src/server.ts"
+compatibility_date = "2025-04-23"
+
+[[kv_namespaces]]
+binding = "fitbit"
+id = "bf2805f5593f4c0ba31274882c779e9d"
+preview_id = "2cf0c543abe84c77a03a3a5a7bc3fab0"

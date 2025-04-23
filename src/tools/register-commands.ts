@@ -1,5 +1,5 @@
 import { DISCONNECT, GET_PROFILE } from '../commands.js';
-import config from '../config.js';
+import 'dotenv/config';
 
 /**
  * This file is meant to be run from the command line, and is not used by the
@@ -11,12 +11,12 @@ import config from '../config.js';
  * Register all commands globally.  This can take o(minutes), so wait until
  * you're sure these are the commands you want.
  */
-const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/commands`;
+const url = `https://discord.com/api/v10/applications/${process.env.DISCORD_CLIENT_ID}/commands`;
 
 const res = await fetch(url, {
 	headers: {
 		'Content-Type': 'application/json',
-		Authorization: `Bot ${config.DISCORD_TOKEN}`,
+		Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
 	},
 	method: 'PUT',
 	body: JSON.stringify([GET_PROFILE, DISCONNECT]),

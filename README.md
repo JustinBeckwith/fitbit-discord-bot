@@ -13,10 +13,9 @@ Create a file called `config.json`:
   "FITBIT_CLIENT_SECRET": "...",
   "FITBIT_REDIRECT_URI": "http://localhost:3000/fitbit-oauth-callback",
   "FITBIT_SUBSCRIBER_VERIFY": "...",
-  "DATABASE_TYPE": "redis",
   "COOKIE_SECRET": "...",
   "VERIFICATION_URL": "http://localhost:3000/verified-role"
 }
 ```
 
-You are going to want a local Redis database too.  
+

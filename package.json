@@ -9,7 +9,7 @@
   },
   "type": "module",
   "scripts": {
-    "test": "vitest",
+    "test": "tsx --test ./test/test.ts",
     "fix": "biome check --write .",
     "lint": "biome check .",
     "dev": "wrangler dev --port 3000",
@@ -27,6 +27,7 @@
     "@cloudflare/workers-types": "^4.20250423.0",
     "@types/express": "^5.0.1",
     "@types/node": "^22.14.1",
+    "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "wrangler": "^4.13.0"
   },

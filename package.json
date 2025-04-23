@@ -22,7 +22,7 @@
     "@google-cloud/firestore": "^7.6.0",
     "body-parser": "^2.0.0",
     "cookie-parser": "^1.4.7",
-    "discord-interactions": "^3.2.0",
+    "discord-interactions": "^4.0.0",
     "dotenv": "^16.5.0",
     "express": "^4.21.1",
     "redis": "^4.5.0"

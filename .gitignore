@@ -3,3 +3,4 @@ build
 coverage
 config.json
 dump.rdb
+.env

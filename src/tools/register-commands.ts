@@ -1,5 +1,6 @@
-import { DISCONNECT, GET_PROFILE } from '../commands.js';
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { CONNECT, DISCONNECT, GET_PROFILE } from '../commands.js';
+dotenv.config({ path: '.dev.vars' });
 
 /**
  * This file is meant to be run from the command line, and is not used by the
@@ -19,7 +20,7 @@ const res = await fetch(url, {
 		Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
 	},
 	method: 'PUT',
-	body: JSON.stringify([GET_PROFILE, DISCONNECT]),
+	body: JSON.stringify([GET_PROFILE, DISCONNECT, CONNECT]),
 });
 console.log('Registered all commands');
 const data = await res.json();

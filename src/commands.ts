@@ -3,6 +3,11 @@
  * and registration.
  */
 
+export const CONNECT = {
+	name: 'connect',
+	description: 'Connect your Fitbit account to your Discord account.',
+};
+
 export const DISCONNECT = {
 	name: 'disconnect',
 	description: 'Clear all associated Fitbit data and disconnect your account.',

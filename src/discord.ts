@@ -1,5 +1,4 @@
-import crypto from 'node:crypto';
-import config from './config.js';
+import type { Env } from './config.js';
 import * as storage from './storage.js';
 
 /**
@@ -49,12 +48,12 @@ export interface OAuth2UserInfo {
  * Generate the url which the user will be directed to in order to approve the
  * bot, and see the list of requested scopes.
  */
-export function getOAuthUrl() {
+export function getOAuthUrl(env: Env) {
 	const state = crypto.randomUUID();
 
 	const url = new URL('https://discord.com/api/oauth2/authorize');
-	url.searchParams.set('client_id', config.DISCORD_CLIENT_ID);
-	url.searchParams.set('redirect_uri', config.DISCORD_REDIRECT_URI);
+	url.searchParams.set('client_id', env.DISCORD_CLIENT_ID);
+	url.searchParams.set('redirect_uri', env.DISCORD_REDIRECT_URI);
 	url.searchParams.set('response_type', 'code');
 	url.searchParams.set('state', state);
 	url.searchParams.set('scope', 'role_connections.write identify');
@@ -68,14 +67,15 @@ export function getOAuthUrl() {
  */
 export async function getOAuthTokens(
 	code: string,
+	env: Env,
 ): Promise<OAuth2TokenResponse> {
 	const url = 'https://discord.com/api/v10/oauth2/token';
 	const data = new URLSearchParams({
-		client_id: config.DISCORD_CLIENT_ID,
-		client_secret: config.DISCORD_CLIENT_SECRET,
+		client_id: env.DISCORD_CLIENT_ID,
+		client_secret: env.DISCORD_CLIENT_SECRET,
 		grant_type: 'authorization_code',
 		code,
-		redirect_uri: config.DISCORD_REDIRECT_URI,
+		redirect_uri: env.DISCORD_REDIRECT_URI,
 	});
 
 	const r = await fetch(url, {
@@ -97,12 +97,13 @@ export async function getOAuthTokens(
 export async function getAccessToken(
 	userId: string,
 	data: storage.DiscordData,
+	env: Env,
 ) {
 	if (Date.now() > data.expires_at) {
 		const url = 'https://discord.com/api/v10/oauth2/token';
 		const body = new URLSearchParams({
-			client_id: config.DISCORD_CLIENT_ID,
-			client_secret: config.DISCORD_CLIENT_SECRET,
+			client_id: env.DISCORD_CLIENT_ID,
+			client_secret: env.DISCORD_CLIENT_SECRET,
 			grant_type: 'refresh_token',
 			refresh_token: data.refresh_token,
 		});
@@ -117,7 +118,7 @@ export async function getAccessToken(
 		console.log(`new discord access token: ${responseData.access_token}`);
 		data.access_token = responseData.access_token;
 		data.expires_at = Date.now() + responseData.expires_in * 1000;
-		await storage.storeDiscordTokens(userId, data);
+		await storage.storeDiscordTokens(env, userId, data);
 		return responseData.access_token;
 	}
 	return data.access_token;
@@ -127,16 +128,16 @@ export async function getAccessToken(
  * Revoke the given user's Discord access and refresh tokens.
  * @param userId The Discord User ID
  */
-export async function revokeAccess(userId: string) {
+export async function revokeAccess(userId: string, env: Env) {
 	const url = 'https://discord.com/api/oauth2/token/revoke';
-	const tokens = await storage.getDiscordTokens(userId);
+	const tokens = await env.fitbit.get<storage.DiscordData>(`discord-${userId}`);
 
 	// revoke the refresh token
 	await fetch(url, {
 		method: 'POST',
 		body: new URLSearchParams({
-			client_id: config.DISCORD_CLIENT_ID,
-			client_secret: config.DISCORD_CLIENT_SECRET,
+			client_id: env.DISCORD_CLIENT_ID,
+			client_secret: env.DISCORD_CLIENT_SECRET,
 			token: tokens.refresh_token,
 			token_type_hint: 'refresh_token',
 		}),
@@ -146,7 +147,7 @@ export async function revokeAccess(userId: string) {
 	});
 
 	// remove the tokens from storage
-	await storage.deleteDiscordTokens(userId);
+	await storage.deleteDiscordTokens(env, userId);
 }
 
 /**
@@ -171,10 +172,11 @@ export async function pushMetadata(
 	userId: string,
 	data: storage.DiscordData,
 	metadata: Record<string, string>,
+	env: Env,
 ) {
 	// GET/PUT /users/@me/applications/:id/role-connection
-	const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
-	const accessToken = await getAccessToken(userId, data);
+	const url = `https://discord.com/api/v10/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`;
+	const accessToken = await getAccessToken(userId, data, env);
 	const body = {
 		platform_name: 'Fitbit Discord Bot',
 		metadata,
@@ -198,10 +200,14 @@ export async function pushMetadata(
  * Fetch the metadata currently pushed to Discord for the currently logged
  * in user, for this specific bot.
  */
-export async function getMetadata(userId: string, data: storage.DiscordData) {
+export async function getMetadata(
+	userId: string,
+	data: storage.DiscordData,
+	env: Env,
+) {
 	// GET/PUT /users/@me/applications/:id/role-connection
-	const url = `https://discord.com/api/v10/users/@me/applications/${config.DISCORD_CLIENT_ID}/role-connection`;
-	const accessToken = await getAccessToken(userId, data);
+	const url = `https://discord.com/api/v10/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`;
+	const accessToken = await getAccessToken(userId, data, env);
 	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${accessToken}`,
@@ -215,8 +221,8 @@ export async function getMetadata(userId: string, data: storage.DiscordData) {
  * Register the metadata to be stored by Discord. This should be a one time action.
  * Note: uses a Bot token for authentication, not a user token.
  */
-export async function registerMetadataSchema() {
-	const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
+export async function registerMetadataSchema(env: Env) {
+	const url = `https://discord.com/api/v10/applications/${env.DISCORD_CLIENT_ID}/role-connections/metadata`;
 	const body = [
 		{
 			key: 'averagedailysteps',
@@ -250,7 +256,7 @@ export async function registerMetadataSchema() {
 			body: JSON.stringify(body),
 			headers: {
 				'Content-Type': 'application/json',
-				Authorization: `Bot ${config.DISCORD_TOKEN}`,
+				Authorization: `Bot ${env.DISCORD_TOKEN}`,
 			},
 		});
 		const responseData = await res.json();
@@ -265,12 +271,12 @@ export async function registerMetadataSchema() {
  * Fetch the metadata schema to be used by Discord for the current bot.
  * Note: uses a Bot token for authentication, not a user token.
  */
-export async function getMetadataSchema() {
-	const url = `https://discord.com/api/v10/applications/${config.DISCORD_CLIENT_ID}/role-connections/metadata`;
+export async function getMetadataSchema(env: Env) {
+	const url = `https://discord.com/api/v10/applications/${env.DISCORD_CLIENT_ID}/role-connections/metadata`;
 	const res = await fetch(url, {
 		headers: {
 			'Content-Type': 'application/json',
-			Authorization: `Bot ${config.DISCORD_TOKEN}`,
+			Authorization: `Bot ${env.DISCORD_TOKEN}`,
 		},
 	});
 	const responseData = await res.json();

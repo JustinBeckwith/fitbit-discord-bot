@@ -9,33 +9,26 @@
   },
   "type": "module",
   "scripts": {
-    "pretest": "npm run build",
-    "test": "c8 mocha build/test",
+    "test": "vitest",
     "fix": "biome check --write .",
     "lint": "biome check .",
-    "dev": "tsc --watch & nodemon -w build/src build/src/server.js",
+    "dev": "wrangler dev --port 3000",
     "build": "tsc",
-    "coverage": "c8 report --reporter=json",
-    "start": "node build/src/server.js"
+    "start": "wrangler dev --port 3000",
+    "register": "tsx ./src/discord/tools/register-commands.ts"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^7.6.0",
-    "body-parser": "^2.0.0",
-    "cookie-parser": "^1.4.7",
-    "discord-interactions": "^3.2.0",
+    "discord-interactions": "^4.1.1",
     "dotenv": "^16.5.0",
-    "express": "^4.21.1",
-    "redis": "^4.5.0"
+    "hono": "^4.7.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "@types/express": "^4.17.14",
-    "@types/mocha": "^10.0.0",
+    "@cloudflare/workers-types": "^4.20250423.0",
+    "@types/express": "^5.0.1",
     "@types/node": "^22.14.1",
-    "c8": "^10.0.0",
-    "mocha": "^11.0.0",
-    "nodemon": "^3.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.13.0"
   },
   "keywords": [],
   "author": "Justin Beckwith <justin.beckwith@gmail.com>",

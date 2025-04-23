@@ -1,14 +1,13 @@
-import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser';
 import {
 	InteractionResponseType,
 	InteractionType,
-	verifyKeyMiddleware,
+	verifyKey,
 } from 'discord-interactions';
-import express from 'express';
+import { type Context, Hono, type HonoRequest } from 'hono';
 import { DISCONNECT, GET_PROFILE } from './commands.js';
 import { updateMetadata } from './common.js';
-import config from './config.js';
+import type { Env } from './config.js';
+import type { Interaction } from './discord-types.js';
 import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
 import * as storage from './storage.js';
@@ -17,137 +16,137 @@ import * as storage from './storage.js';
  * Main HTTP server used for the bot.
  */
 
-const app = express();
-app.use(bodyParser.json());
-app.use(cookieParser(config.COOKIE_SECRET));
+const app = new Hono<{ Bindings: Env }>();
 
-app.get('/', (req, res) => {
+app.get('/', async (c) => {
 	// Just a happy little route to show our server is up.
-	res.send('👋');
+	c.text('👋');
 });
 
 /**
  * Main entry point for bot slash commands. It uses the `verifyKeyMiddleware`
  * to validate request signatures, and returns relevent slash command data.
  */
-app.post(
-	'/',
-	verifyKeyMiddleware(config.DISCORD_PUBLIC_KEY),
-	async (request, response) => {
-		const message = request.body;
-		if (message.type === InteractionType.PING) {
-			console.log('Handling Ping request');
-			response.json({
-				type: InteractionResponseType.PONG,
-			});
-		} else if (message.type === InteractionType.APPLICATION_COMMAND) {
-			console.log(`Handling application command: ${message.data.name}`);
-			switch (message.data.name.toLowerCase()) {
-				/**
-				 * DISCONNECT
-				 * Revokes all tokens to both Discord and Fitbit, while clearing out
-				 * all associated data:
-				 * 1. Push empty Metadata to Discord to null out the verified role
-				 * 2. Revoke Discord OAuth2 tokens
-				 * 3. Fetch the Fitbit UserId using the Discord UserId
-				 * 4. Revoke Fitbit OAuth2 tokens
-				 * 5. Let the user know the slash command worked
-				 */
-				case DISCONNECT.name.toLowerCase(): {
-					const userId = message.member.user.id;
-					let cleanedUp = false;
-					const discordTokens = await storage.getDiscordTokens(userId);
+app.post('/', async (c) => {
+	const { isValid, interaction } = await verifyDiscordRequest(c.req, c.env);
+	if (!isValid || !interaction) {
+		return c.text('Bad request signature.', { status: 401 });
+	}
 
-					if (discordTokens) {
-						cleanedUp = true;
+	console.log(JSON.stringify(interaction, null, 2));
 
-						// 1. Push empty Metadata to Discord to null out the verified role
-						await discord.pushMetadata(userId, discordTokens, {});
+	if (interaction.type === InteractionType.PING) {
+		console.log('Handling Ping request');
+		return c.json({
+			type: InteractionResponseType.PONG,
+		});
+	}
 
-						// 2. Revoke Discord OAuth2 tokens
-						await discord.revokeAccess(userId);
-					}
+	if (interaction.type === InteractionType.APPLICATION_COMMAND) {
+		console.log(`Handling application command: ${interaction.data.name}`);
+		switch (interaction.data.name.toLowerCase()) {
+			/**
+			 * DISCONNECT
+			 * Revokes all tokens to both Discord and Fitbit, while clearing out
+			 * all associated data:
+			 * 1. Push empty Metadata to Discord to null out the verified role
+			 * 2. Revoke Discord OAuth2 tokens
+			 * 3. Fetch the Fitbit UserId using the Discord UserId
+			 * 4. Revoke Fitbit OAuth2 tokens
+			 * 5. Let the user know the slash command worked
+			 */
+			case DISCONNECT.name.toLowerCase(): {
+				const userId = interaction.member.user.id;
+				let cleanedUp = false;
+				const discordTokens = await storage.getDiscordTokens(c.env, userId);
 
-					// 3. Fetch the Fitbit UserId using the Discord UserId
-					const fitbitUserId = await storage.getLinkedFitbitUserId(userId);
-					if (fitbitUserId) {
-						cleanedUp = true;
+				if (discordTokens) {
+					cleanedUp = true;
 
-						// 4. Revoke Fitbit OAuth2 tokens
-						await fitbit.revokeAccess(fitbitUserId);
-						await storage.deleteLinkedFitbitUser(userId);
-					}
+					// 1. Push empty Metadata to Discord to null out the verified role
+					await discord.pushMetadata(userId, discordTokens, {}, c.env);
 
-					// 5. Let the user know the slash command worked
-					if (cleanedUp) {
-						response.send({
-							type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-							data: {
-								content: 'Fitbit account disconnected.',
-							},
-						});
-					} else {
-						sendNoConnectionFound(response);
-					}
-					break;
+					// 2. Revoke Discord OAuth2 tokens
+					await discord.revokeAccess(userId, c.env);
 				}
-				case GET_PROFILE.name.toLowerCase(): {
-					/**
-					 * GET PROFILE
-					 * If the user has a linked Fitbit account, fetch the profile data.
-					 */
-					const userId = message.member.user.id;
-					const fitbitUserId = await storage.getLinkedFitbitUserId(userId);
-					if (!fitbitUserId) {
-						return sendNoConnectionFound(response);
-					}
 
-					const fitbitTokens = await storage.getFitbitTokens(fitbitUserId);
-					if (!fitbitTokens) {
-						return sendNoConnectionFound(response);
-					}
-					const profile = await fitbit.getProfile(fitbitUserId, fitbitTokens);
-					const metadata = {
-						averagedailysteps: profile.user.averageDailySteps,
-						ambassador: profile.user.ambassador,
-						membersince: profile.user.memberSince,
-						iscoach: profile.user.isCoach,
-					};
-					response.send({
+				// 3. Fetch the Fitbit UserId using the Discord UserId
+				const fitbitUserId = await storage.getLinkedFitbitUserId(c.env, userId);
+				if (fitbitUserId) {
+					cleanedUp = true;
+
+					// 4. Revoke Fitbit OAuth2 tokens
+					await fitbit.revokeAccess(fitbitUserId, c.env);
+					await storage.deleteLinkedFitbitUser(c.env, userId);
+				}
+
+				// 5. Let the user know the slash command worked
+				if (cleanedUp) {
+					return c.json({
 						type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
 						data: {
-							content: `\`\`\`${JSON.stringify(metadata)}\`\`\``,
+							content: 'Fitbit account disconnected.',
 						},
 					});
-					break;
 				}
-				default:
-					console.error('Unknown Command');
-					response.status(400).send({ error: 'Unknown Type' });
-					break;
+				return sendNoConnectionFound(c);
 			}
-		} else {
-			console.error('Unknown Type');
-			response.status(400).send({ error: 'Unknown Type' });
+			case GET_PROFILE.name.toLowerCase(): {
+				/**
+				 * GET PROFILE
+				 * If the user has a linked Fitbit account, fetch the profile data.
+				 */
+				const userId = interaction.member.user.id;
+				const fitbitUserId = await storage.getLinkedFitbitUserId(c.env, userId);
+				if (!fitbitUserId) {
+					return sendNoConnectionFound(c);
+				}
+
+				const fitbitTokens = await storage.getFitbitTokens(c.env, fitbitUserId);
+				if (!fitbitTokens) {
+					return sendNoConnectionFound(c);
+				}
+				const profile = await fitbit.getProfile(
+					fitbitUserId,
+					fitbitTokens,
+					c.env,
+				);
+				const metadata = {
+					averagedailysteps: profile.user.averageDailySteps,
+					ambassador: profile.user.ambassador,
+					membersince: profile.user.memberSince,
+					iscoach: profile.user.isCoach,
+				};
+				return c.json({
+					type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+					data: {
+						content: `\`\`\`${JSON.stringify(metadata)}\`\`\``,
+					},
+				});
+			}
+			default:
+				console.error('Unknown Command');
+				return c.json({ error: 'Unknown Type' }, { status: 400 });
 		}
-	},
-);
+	}
+	return c.json({ error: 'Unknown Type' }, { status: 400 });
+});
 
 /**
  * Route configured in the Discord developer console which facilitates the
  * connection between Discord and Fitbit. To start the flow, generate the OAuth2
  * consent dialog url for Discord, and send the user there.
  */
-app.get('/verified-role', async (req, res) => {
-	const { url, state } = discord.getOAuthUrl();
+app.get('/verified-role', async (c) => {
+	const { url, state } = discord.getOAuthUrl(c.env);
 
 	// Store the signed state param in the user's cookies so we can verify
 	// the value later. See:
 	// https://discord.com/developers/docs/topics/oauth2#state-and-security
-	res.cookie('clientState', state, { maxAge: 1000 * 60 * 5, signed: true });
+	//c.cookie('clientState', state, { maxAge: 1000 * 60 * 5, signed: true });
 
 	// Send the user to the Discord owned OAuth2 authorization endpoint
-	res.redirect(url);
+	c.redirect(url);
 });
 
 /**
@@ -159,44 +158,44 @@ app.get('/verified-role', async (req, res) => {
  * 3. Stores the OAuth2 Discord Tokens in Redis / Firestore
  * 4. Generates an OAuth2 consent dialog url for Fitbit, and redirects the user.
  */
-app.get('/discord-oauth-callback', async (req, res) => {
+app.get('/discord-oauth-callback', async (c) => {
 	try {
 		// 1. Uses the code and state to acquire Discord OAuth2 tokens
-		const code = req.query.code as string;
-		const discordState = req.query.state as string;
+		const code = c.req.query('code');
+		const discordState = c.req.query('state');
 
 		// make sure the state parameter exists
-		const { clientState } = req.signedCookies;
-		if (clientState !== discordState) {
-			console.error('State verification failed.');
-			return res.sendStatus(403);
-		}
+		// const { clientState } = c.req.signedCookies;
+		// if (clientState !== discordState) {
+		// 	console.error('State verification failed.');
+		// 	return c.status(403);
+		// }
 
-		const tokens = await discord.getOAuthTokens(code);
+		const tokens = await discord.getOAuthTokens(code, c.env);
 
 		// 2. Uses the Discord Access Token to fetch the user profile
 		const meData = await discord.getUserData(tokens);
 		const userId = meData.user.id;
-		await storage.storeDiscordTokens(userId, {
+		await storage.storeDiscordTokens(c.env, userId, {
 			access_token: tokens.access_token,
 			refresh_token: tokens.refresh_token,
 			expires_at: Date.now() + tokens.expires_in * 1000,
 		});
 
 		// start the fitbit OAuth2 flow by generating a new OAuth2 Url
-		const { url, codeVerifier, state } = fitbit.getOAuthUrl();
+		const { url, codeVerifier, state } = fitbit.getOAuthUrl(c.env);
 
 		// store the code verifier and state arguments required by the fitbit url
-		await storage.storeStateData(state, {
+		await storage.storeStateData(c.env, state, {
 			discordUserId: userId,
 			codeVerifier,
 		});
 
 		// send the user to the fitbit OAuth2 consent dialog screen
-		res.redirect(url);
+		c.redirect(url);
 	} catch (e) {
 		console.error(e);
-		res.sendStatus(500);
+		c.status(500);
 	}
 });
 
@@ -209,15 +208,18 @@ app.get('/discord-oauth-callback', async (req, res) => {
  * 4. Create a new subscription to ensure webhook events are sent for the current user
  * 5. Fetch Fitbit profile metadata, and push it to the Discord metadata service
  */
-app.get('/fitbit-oauth-callback', async (req, res) => {
+app.get('/fitbit-oauth-callback', async (c) => {
 	try {
 		// 1. Use the state in the querystring to fetch the code verifier and challenge
-		const state = req.query.state as string;
-		const { discordUserId, codeVerifier } = await storage.getStateData(state);
+		const state = c.req.query('state');
+		const { discordUserId, codeVerifier } = await storage.getStateData(
+			c.env,
+			state,
+		);
 
 		// 2. Use the code in the querystring to acquire Fitbit OAuth2 tokens
-		const code = req.query.code as string;
-		const tokens = await fitbit.getOAuthTokens(code, codeVerifier);
+		const code = c.req.query('code');
+		const tokens = await fitbit.getOAuthTokens(code, codeVerifier, c.env);
 
 		// 3. Store the Fitbit tokens in redis / Firestore
 		const userId = tokens.user_id;
@@ -228,20 +230,20 @@ app.get('/fitbit-oauth-callback', async (req, res) => {
 			expires_at: Date.now() + tokens.expires_in * 1000,
 			code_verifier: codeVerifier,
 		};
-		await storage.storeFitbitTokens(userId, data);
+		await storage.storeFitbitTokens(c.env, userId, data);
 
 		// 4. Create a new subscription to ensure webhook events are sent for the current user
-		await fitbit.createSubscription(userId, data);
+		await fitbit.createSubscription(userId, data, c.env);
 
 		// 5. Fetch Fitbit profile metadata, and push it to the Discord metadata service
-		await updateMetadata(userId);
+		await updateMetadata(userId, c.env);
 
-		await storage.setLinkedFitbitUserId(discordUserId, userId);
+		await storage.setLinkedFitbitUserId(c.env, discordUserId, userId);
 
-		res.send('You did it!  Now go back to Discord.');
+		c.text('You did it!  Now go back to Discord.');
 	} catch (e) {
 		console.error(e);
-		res.sendStatus(500);
+		c.status(500);
 	}
 });
 
@@ -252,14 +254,14 @@ app.get('/fitbit-oauth-callback', async (req, res) => {
  * Verify subscriber as explained in:
  * https://dev.fitbit.com/build/reference/web-api/developer-guide/using-subscriptions/#Verifying-a-Subscriber
  */
-app.get('/fitbit-webhook', async (req, res) => {
-	const verify = req.query.verify as string;
-	console.log(req.url);
-	if (verify === config.FITBIT_SUBSCRIBER_VERIFY) {
+app.get('/fitbit-webhook', async (c) => {
+	const verify = c.req.query('verify');
+	console.log(c.req.url);
+	if (verify === c.env.FITBIT_SUBSCRIBER_VERIFY) {
 		console.log(`verified: ${verify}`);
-		res.sendStatus(204);
+		c.status(204);
 	} else {
-		res.sendStatus(404);
+		c.status(404);
 	}
 });
 
@@ -269,31 +271,42 @@ app.get('/fitbit-webhook', async (req, res) => {
  * 1. Fetch the Discord and Fitbit tokens from storage (redis / firestore)
  * 2. Fetch the user profile data from Fitbit and send it to Discord
  */
-app.post('/fitbit-webhook', async (req, res) => {
+app.post('/fitbit-webhook', async (c) => {
 	try {
-		const body = req.body as fitbit.WebhookBody;
+		const body = (await c.req.json()) as fitbit.WebhookBody;
 
 		// 1. Fetch the Discord and Fitbit tokens from storage (redis / firestore)
 		const userId = body.ownerId;
-		await updateMetadata(userId);
+		await updateMetadata(userId, c.env);
 
 		// 2. Fetch the user profile data from Fitbit, and push it to Discord
-		res.sendStatus(204);
+		c.status(204);
 	} catch (e) {
-		res.sendStatus(500);
+		c.status(500);
 	}
 });
 
-function sendNoConnectionFound(response) {
-	return response.send({
+function sendNoConnectionFound(c: Context) {
+	return c.json({
 		type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
 		data: {
-			content: `🥴 no Fitbit connection info found.  Visit ${config.VERIFICATION_URL} to set it up.`,
+			content: `🥴 no Fitbit connection info found.  Visit ${c.env.VERIFICATION_URL} to set it up.`,
 		},
 	});
 }
+async function verifyDiscordRequest(request: HonoRequest, env: Env) {
+	const signature = request.header('x-signature-ed25519');
+	const timestamp = request.header('x-signature-timestamp');
+	const body = await request.text();
+	const isValidRequest =
+		signature &&
+		timestamp &&
+		(await verifyKey(body, signature, timestamp, env.DISCORD_PUBLIC_KEY));
+	if (!isValidRequest) {
+		return { isValid: false };
+	}
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-	console.log(`Example app listening on port ${port}`);
-});
+	return { interaction: JSON.parse(body) as Interaction, isValid: true };
+}
+
+export default app;

@@ -1,5 +1,4 @@
-import crypto from 'node:crypto';
-import config from './config.js';
+import type { Env } from './config.js';
 import * as storage from './storage.js';
 
 /**
@@ -120,8 +119,10 @@ export interface ProfileData {
  * request to the Fitbit OAuth2 consent dialog, and the verifier that needs to
  * be used with the subsequent request for the access and refresh tokens.
  */
-function generateCodeVerifier() {
-	const randomString = crypto.randomBytes(96).toString('base64');
+async function generateCodeVerifier() {
+	const randomArray = new Uint8Array(96);
+	crypto.getRandomValues(randomArray);
+	const randomString = btoa(String.fromCharCode(...randomArray));
 	// The valid characters in the code_verifier are [A-Z]/[a-z]/[0-9]/
 	// -/./_/~. Base64 encoded strings are pretty close, so we're just
 	// swapping out a few chars.
@@ -130,12 +131,15 @@ function generateCodeVerifier() {
 		.replace(/=/g, '_')
 		.replace(/\//g, '-');
 	// Generate the base64 encoded SHA256
-	const unencodedCodeChallenge = crypto
-		.createHash('sha256')
-		.update(codeVerifier)
-		.digest('base64');
+	const unencodedCodeChallenge = await crypto.subtle.digest(
+		'SHA-256',
+		new TextEncoder().encode(codeVerifier),
+	);
+	const base64CodeChallenge = btoa(
+		String.fromCharCode(...new Uint8Array(unencodedCodeChallenge)),
+	);
 	// We need to use base64UrlEncoding instead of standard base64
-	const codeChallenge = unencodedCodeChallenge
+	const codeChallenge = base64CodeChallenge
 		.split('=')[0]
 		.replace(/\+/g, '-')
 		.replace(/\//g, '_');
@@ -146,12 +150,16 @@ function generateCodeVerifier() {
  * Generate a url which users will use to approve the current bot for access to
  * their Fitbit account, along with the set of required scopes.
  */
-export function getOAuthUrl() {
-	const { codeVerifier, codeChallenge } = generateCodeVerifier();
-	const state = crypto.randomBytes(20).toString('hex');
+export async function getOAuthUrl(env: Env) {
+	const { codeVerifier, codeChallenge } = await generateCodeVerifier();
+	const stateArray = new Uint8Array(20);
+	crypto.getRandomValues(stateArray);
+	const state = Array.from(stateArray)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
 	const url = new URL('https://www.fitbit.com/oauth2/authorize');
-	url.searchParams.set('client_id', config.FITBIT_CLIENT_ID);
-	url.searchParams.set('redirect_uri', config.FITBIT_REDIRECT_URI);
+	url.searchParams.set('client_id', env.FITBIT_CLIENT_ID);
+	url.searchParams.set('redirect_uri', env.FITBIT_REDIRECT_URI);
 	url.searchParams.set('code_challenge', codeChallenge);
 	url.searchParams.set('code_challenge_method', 'S256');
 	url.searchParams.set('state', state);
@@ -168,14 +176,18 @@ export function getOAuthUrl() {
  * Given an OAuth2 code from the scope approval page, make a request to Fitbit's
  * OAuth2 service to retreive an access token, refresh token, and expiration.
  */
-export async function getOAuthTokens(code: string, codeVerifier: string) {
+export async function getOAuthTokens(
+	code: string,
+	codeVerifier: string,
+	env: Env,
+) {
 	const body = new URLSearchParams({
-		client_id: config.FITBIT_CLIENT_ID,
-		client_secret: config.FITBIT_CLIENT_SECRET,
+		client_id: env.FITBIT_CLIENT_ID,
+		client_secret: env.FITBIT_CLIENT_SECRET,
 		grant_type: 'authorization_code',
 		code_verifier: codeVerifier,
 		code,
-		redirect_uri: config.FITBIT_REDIRECT_URI,
+		redirect_uri: env.FITBIT_REDIRECT_URI,
 	});
 	const r = await fetch('https://api.fitbit.com/oauth2/token', {
 		body: body.toString(),
@@ -195,7 +207,11 @@ export async function getOAuthTokens(code: string, codeVerifier: string) {
  *
  * See https://dev.fitbit.com/build/reference/web-api/authorization/refresh-token/.
  */
-async function getAccessToken(userId: string, data: storage.FitbitData) {
+async function getAccessToken(
+	userId: string,
+	data: storage.FitbitData,
+	env: Env,
+) {
 	if (Date.now() > data.expires_at) {
 		console.log('token expired, fetching a newsy one');
 		const url = 'https://api.fitbit.com/oauth2/token';
@@ -204,7 +220,7 @@ async function getAccessToken(userId: string, data: storage.FitbitData) {
 			refresh_token: data.refresh_token,
 		});
 		const authCode = Buffer.from(
-			`${config.FITBIT_CLIENT_ID}:${config.FITBIT_CLIENT_SECRET}`,
+			`${env.FITBIT_CLIENT_ID}:${env.FITBIT_CLIENT_SECRET}`,
 		).toString('base64');
 		const r = await fetch(url, {
 			body,
@@ -218,7 +234,7 @@ async function getAccessToken(userId: string, data: storage.FitbitData) {
 		console.log(`new access token: ${tokens.access_token}`);
 		data.access_token = tokens.access_token;
 		data.expires_at = Date.now() + tokens.expires_in * 1000;
-		await storage.storeFitbitTokens(userId, data);
+		await storage.storeFitbitTokens(env, userId, data);
 		return tokens.access_token;
 	}
 	return data.access_token;
@@ -229,20 +245,20 @@ async function getAccessToken(userId: string, data: storage.FitbitData) {
  * See https://dev.fitbit.com/build/reference/web-api/authorization/revoke-token.
  * @param userId The Fitbit User ID
  */
-export async function revokeAccess(userId: string) {
+export async function revokeAccess(userId: string, env: Env) {
 	const url = 'https://api.fitbit.com/oauth2/revoke';
 
 	// Revoke the refresh token. It would appear that revoking the refresh token
 	// also revokes all associated access tokens for this implementation of the
 	// OAuth2 API.
 	try {
-		const tokens = await storage.getFitbitTokens(userId);
-		const accessToken = await getAccessToken(userId, tokens);
+		const tokens = await storage.getFitbitTokens(env, userId);
+		const accessToken = await getAccessToken(userId, tokens, env);
 
 		await fetch(url, {
 			method: 'POST',
 			body: new URLSearchParams({
-				client_id: config.FITBIT_CLIENT_ID,
+				client_id: env.FITBIT_CLIENT_ID,
 				token: tokens.refresh_token,
 			}),
 			headers: {
@@ -257,7 +273,7 @@ export async function revokeAccess(userId: string) {
 	}
 
 	// remove the tokens from storage
-	await storage.deleteFitbitTokens(userId);
+	await storage.deleteFitbitTokens(env, userId);
 }
 
 /*
@@ -268,10 +284,11 @@ export async function revokeAccess(userId: string) {
 export async function createSubscription(
 	userId: string,
 	data: storage.FitbitData,
+	env: Env,
 ) {
 	// POST /1/user/[user-id]/[collection-path]/apiSubscriptions/[subscription-id].json
 	const url = `https://api.fitbit.com/1/user/-/apiSubscriptions/${data.discord_user_id}.json`;
-	const token = await getAccessToken(userId, data);
+	const token = await getAccessToken(userId, data, env);
 	await fetch(url, {
 		method: 'POST',
 		headers: {
@@ -286,10 +303,11 @@ export async function createSubscription(
 export async function listSubscriptions(
 	userId: string,
 	data: storage.FitbitData,
+	env: Env,
 ) {
 	// GET /1/user/[user-id]/[collection-path]/apiSubscriptions.json
 	const url = 'https://api.fitbit.com/1/user/-/apiSubscriptions.json';
-	const token = await getAccessToken(userId, data);
+	const token = await getAccessToken(userId, data, env);
 	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${token}`,
@@ -302,10 +320,14 @@ export async function listSubscriptions(
 /**
  * Fetch the user profile for the current user.
  */
-export async function getProfile(userId: string, data: storage.FitbitData) {
+export async function getProfile(
+	userId: string,
+	data: storage.FitbitData,
+	env: Env,
+) {
 	// /1/user/[user-id]/profile.json
 	const url = 'https://api.fitbit.com/1/user/-/profile.json';
-	const token = await getAccessToken(userId, data);
+	const token = await getAccessToken(userId, data, env);
 	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${token}`,

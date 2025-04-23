@@ -4,3 +4,4 @@ coverage
 config.json
 dump.rdb
 .env
+.dev.vars

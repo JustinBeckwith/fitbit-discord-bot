@@ -2,6 +2,8 @@
 
 A Discord bot that verifies users' Fitbit accounts and manages their roles based on their Fitbit profile data. The bot uses Discord's Role Connections feature to automatically update user roles based on their Fitbit profile information.
 
+<img width="343" alt="image" src="https://github.com/user-attachments/assets/3b682886-02da-4618-b681-ab8bb1c295ab" />
+
 ## Features
 
 - Connect Discord accounts with Fitbit profiles
@@ -13,6 +15,9 @@ A Discord bot that verifies users' Fitbit accounts and manages their roles based
 - Slash commands for user interaction
 - Secure OAuth2 authentication flow
 - Automatic token refresh and management
+
+<img width="593" alt="image" src="https://github.com/user-attachments/assets/2a93a727-6147-41e3-8881-6e9f7d3083e6" />
+
 
 ## Prerequisites
 

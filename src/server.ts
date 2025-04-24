@@ -182,7 +182,7 @@ app.get('/discord-oauth-callback', async (c) => {
 		);
 		if (clientState !== discordState) {
 			console.error('State verification failed.');
-			return c.status(403);
+			return c.json({ error: 'State verification failed.' }, { status: 403 });
 		}
 
 		const tokens = await discord.getOAuthTokens(code, c.env);
@@ -208,7 +208,7 @@ app.get('/discord-oauth-callback', async (c) => {
 		return c.redirect(url);
 	} catch (e) {
 		console.error(e);
-		return c.status(500);
+		return c.body(null, 500);
 	}
 });
 
@@ -256,7 +256,7 @@ app.get('/fitbit-oauth-callback', async (c) => {
 		return c.text('You did it!  Now go back to Discord.');
 	} catch (e) {
 		console.error(e);
-		return c.status(500);
+		return c.body(null, 500);
 	}
 });
 
@@ -269,12 +269,11 @@ app.get('/fitbit-oauth-callback', async (c) => {
  */
 app.get('/fitbit-webhook', async (c) => {
 	const verify = c.req.query('verify');
-	console.log(c.req.url);
 	if (verify === c.env.FITBIT_SUBSCRIBER_VERIFY) {
 		console.log(`verified: ${verify}`);
-		return c.status(204);
+		return c.body(null, 204);
 	}
-	return c.status(404);
+	return c.body(null, 404);
 });
 
 /**
@@ -285,18 +284,25 @@ app.get('/fitbit-webhook', async (c) => {
  */
 app.post('/fitbit-webhook', async (c) => {
 	try {
-		const body = (await c.req.json()) as fitbit.WebhookBody;
-
-		// 1. Fetch the Discord and Fitbit tokens from storage KV
-		const userId = body.ownerId;
+		const body = await c.req.json<fitbit.WebhookBody[]>();
+		if (body.length === 0) throw new Error('No events returned from Fitbit');
+		const userId = body[0].ownerId;		
 		await updateMetadata(userId, c.env);
-
-		// 2. Fetch the user profile data from Fitbit, and push it to Discord
-		return c.status(204);
+		return c.body(null, 204);
 	} catch (e) {
-		return c.status(500);
+		console.error(e);
+		return c.body(null, 500);
 	}
 });
+
+// app.get('/dump', async (c) => {
+// 	const keys = await c.env.fitbit.list();
+// 	for (const key of keys.keys) {
+// 		const value = await c.env.fitbit.get(key.name);
+// 		console.log(`${key.name}: ${value}\n\n`);
+// 	}
+// 	return c.text('done');
+// });
 
 function sendNoConnectionFound(c: Context) {
 	return c.json({

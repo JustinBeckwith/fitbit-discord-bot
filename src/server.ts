@@ -286,7 +286,7 @@ app.post('/fitbit-webhook', async (c) => {
 	try {
 		const body = await c.req.json<fitbit.WebhookBody[]>();
 		if (body.length === 0) throw new Error('No events returned from Fitbit');
-		const userId = body[0].ownerId;		
+		const userId = body[0].ownerId;
 		await updateMetadata(userId, c.env);
 		return c.body(null, 204);
 	} catch (e) {

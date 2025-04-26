@@ -1,0 +1,35 @@
+name: Deploy
+on:
+  push:
+    branches:
+      - main
+
+# Prevent concurrent deployments
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'  
+      - run: npm ci
+      - run: npm run register-commands
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+      - run: npm run register-metadata-schema
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }} 

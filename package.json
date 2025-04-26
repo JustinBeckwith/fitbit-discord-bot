@@ -16,7 +16,8 @@
     "build": "tsc",
     "start": "wrangler dev --port 3000",
     "register-commands": "tsx ./src/tools/register-commands.ts",
-    "register-metadata-schema": "tsx ./src/tools/register-metadata-schema.ts"
+    "register-metadata-schema": "tsx ./src/tools/register-metadata-schema.ts",
+    "publish": "wrangler deploy"
   },
   "dependencies": {
     "discord-interactions": "^4.1.1",

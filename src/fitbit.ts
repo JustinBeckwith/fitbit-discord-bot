@@ -1,3 +1,4 @@
+import { throwFetchError } from './common.js';
 import type { Env } from './config.js';
 import * as storage from './storage.js';
 
@@ -107,6 +108,21 @@ export interface ProfileData {
 	};
 }
 
+export interface Activity {
+	activeDuration: number;
+	activityLevel: Array<{
+		minutes: number;
+		name: string;
+	}>;
+	activityName: string;
+	calories: number;
+	duration: number;
+	lastModified: string;
+	logId: number;
+	startTime: string;
+	steps: number;
+}
+
 /**
  * The following methods all facilitate OAuth2 communication with Fitbit.
  * See https://dev.fitbit.com/build/reference/web-api/developer-guide/authorization/
@@ -196,6 +212,9 @@ export async function getOAuthTokens(
 			'Content-Type': 'application/x-www-form-urlencoded',
 		},
 	});
+	if (!r.ok) {
+		throwFetchError(r);
+	}
 	const data = (await r.json()) as OAuthTokens;
 	return data;
 }
@@ -230,6 +249,9 @@ async function getAccessToken(
 				'Content-Type': 'application/x-www-form-urlencoded',
 			},
 		});
+		if (!r.ok) {
+			throwFetchError(r);
+		}
 		const tokens = (await r.json()) as OAuthTokens;
 		console.log(`new access token: ${tokens.access_token}`);
 		data.access_token = tokens.access_token;
@@ -255,7 +277,7 @@ export async function revokeAccess(userId: string, env: Env) {
 		const tokens = await storage.getFitbitTokens(env, userId);
 		const accessToken = await getAccessToken(userId, tokens, env);
 
-		await fetch(url, {
+		const res = await fetch(url, {
 			method: 'POST',
 			body: new URLSearchParams({
 				client_id: env.FITBIT_CLIENT_ID,
@@ -266,6 +288,9 @@ export async function revokeAccess(userId: string, env: Env) {
 				'Content-Type': 'application/x-www-form-urlencoded',
 			},
 		});
+		if (!res.ok) {
+			throwFetchError(res);
+		}
 	} catch (e) {
 		// if revoking the token fails, remove the tokens from our storage and
 		// move on.
@@ -289,12 +314,15 @@ export async function createSubscription(
 	// POST /1/user/[user-id]/[collection-path]/apiSubscriptions/[subscription-id].json
 	const url = `https://api.fitbit.com/1/user/-/apiSubscriptions/${data.discord_user_id}.json`;
 	const token = await getAccessToken(userId, data, env);
-	await fetch(url, {
+	const res = await fetch(url, {
 		method: 'POST',
 		headers: {
 			authorization: `Bearer ${token}`,
 		},
 	});
+	if (!res.ok) {
+		throwFetchError(res);
+	}
 }
 
 /**
@@ -313,6 +341,9 @@ export async function listSubscriptions(
 			Authorization: `Bearer ${token}`,
 		},
 	});
+	if (!res.ok) {
+		throwFetchError(res);
+	}
 	const responseData = await res.json();
 	return responseData;
 }
@@ -333,6 +364,38 @@ export async function getProfile(
 			Authorization: `Bearer ${token}`,
 		},
 	});
+	if (!res.ok) {
+		throwFetchError(res);
+	}
 	const responseData = (await res.json()) as ProfileData;
 	return responseData;
+}
+
+export interface RecentActivity {
+	activityId: number;
+	calories: number;
+	description: string;
+	distance: number;
+	duration: number;
+	name: string;
+}
+
+export async function getRecentActivities(
+	userId: string,
+	data: storage.FitbitData,
+	env: Env,
+): Promise<RecentActivity[]> {
+	const url = 'https://api.fitbit.com/1/user/-/activities/recent.json';
+	const token = await getAccessToken(userId, data, env);
+	const res = await fetch(url, {
+		headers: {
+			Authorization: `Bearer ${token}`,
+		},
+	});
+	if (!res.ok) {
+		throwFetchError(res);
+	}
+	const responseData = await res.json();
+	console.log(responseData);
+	return responseData.activities;
 }

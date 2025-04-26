@@ -22,6 +22,13 @@ const res = await fetch(url, {
 	method: 'PUT',
 	body: JSON.stringify([GET_PROFILE, DISCONNECT, CONNECT]),
 });
+
+if (!res.ok) {
+	console.error('Failed to register commands');
+	console.error(await res.text());
+	process.exit(1);
+}
+
 console.log('Registered all commands');
 const data = await res.json();
 console.log(data);

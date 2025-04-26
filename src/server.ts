@@ -5,6 +5,7 @@ import {
 } from 'discord-interactions';
 import { Hono, type HonoRequest } from 'hono';
 import { getSignedCookie, setSignedCookie } from 'hono/cookie';
+import { updateActivity } from './activity.js';
 import { commands } from './commands/commands.js';
 import { updateMetadata } from './common.js';
 import type { Env } from './config.js';
@@ -30,7 +31,6 @@ app.get('/', async (c) => {
  * to validate request signatures, and returns relevent slash command data.
  */
 app.post('/', async (c) => {
-	console.log('hello');
 	const { isValid, interaction } = await verifyDiscordRequest(c.req, c.env);
 	if (!isValid || !interaction) {
 		return c.text('Bad request signature.', { status: 401 });
@@ -43,7 +43,6 @@ app.post('/', async (c) => {
 	}
 
 	if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-		console.log(interaction.data);
 		const command = commands.find(
 			(c) => c.name.toLowerCase() === interaction.data.name.toLowerCase(),
 		);
@@ -200,9 +199,19 @@ app.get('/fitbit-webhook', async (c) => {
 app.post('/fitbit-webhook', async (c) => {
 	try {
 		const body = await c.req.json<fitbit.WebhookBody[]>();
+		console.log(body);
 		if (body.length === 0) throw new Error('No events returned from Fitbit');
 		const userId = body[0].ownerId;
 		await updateMetadata(userId, c.env);
+		for (const event of body) {
+			switch (event.collectionType) {
+				case 'activities':
+					await updateActivity(userId, event, c.env);
+					break;
+				default:
+					break;
+			}
+		}
 		return c.body(null, 204);
 	} catch (e) {
 		console.error(e);

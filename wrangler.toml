@@ -1,6 +1,6 @@
 name = "fitbit-discord-bot"
 main = "src/server.ts"
-compatibility_date = "2025-04-23"
+compatibility_date = "2025-04-22"
 
 [[kv_namespaces]]
 binding = "fitbit"

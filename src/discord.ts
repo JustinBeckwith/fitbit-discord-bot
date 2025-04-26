@@ -1,3 +1,5 @@
+import type { APIApplicationCommand } from 'discord-api-types/v10.js';
+import { throwFetchError } from './common.js';
 import type { Env } from './config.js';
 import * as storage from './storage.js';
 
@@ -44,6 +46,8 @@ export interface OAuth2UserInfo {
  * See https://discord.com/developers/docs/topics/oauth2 for more details.
  */
 
+const baseUrl = 'https://discord.com/api/v10';
+
 /**
  * Generate the url which the user will be directed to in order to approve the
  * bot, and see the list of requested scopes.
@@ -69,7 +73,7 @@ export async function getOAuthTokens(
 	code: string,
 	env: Env,
 ): Promise<OAuth2TokenResponse> {
-	const url = 'https://discord.com/api/v10/oauth2/token';
+	const url = `${baseUrl}/oauth2/token`;
 	const data = new URLSearchParams({
 		client_id: env.DISCORD_CLIENT_ID,
 		client_secret: env.DISCORD_CLIENT_SECRET,
@@ -100,7 +104,7 @@ export async function getAccessToken(
 	env: Env,
 ) {
 	if (Date.now() > data.expires_at) {
-		const url = 'https://discord.com/api/v10/oauth2/token';
+		const url = `${baseUrl}/oauth2/token`;
 		const body = new URLSearchParams({
 			client_id: env.DISCORD_CLIENT_ID,
 			client_secret: env.DISCORD_CLIENT_SECRET,
@@ -129,7 +133,7 @@ export async function getAccessToken(
  * @param userId The Discord User ID
  */
 export async function revokeAccess(userId: string, env: Env) {
-	const url = 'https://discord.com/api/oauth2/token/revoke';
+	const url = `${baseUrl}/oauth2/token/revoke`;
 	const tokens = await env.fitbit.get<storage.DiscordData>(`discord-${userId}`);
 
 	// revoke the refresh token
@@ -154,7 +158,7 @@ export async function revokeAccess(userId: string, env: Env) {
  * Given a user based access token, fetch profile information for the current user.
  */
 export async function getUserData(tokens: OAuth2TokenResponse) {
-	const url = 'https://discord.com/api/v10/oauth2/@me';
+	const url = `${baseUrl}/oauth2/@me`;
 	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${tokens.access_token}`,
@@ -175,7 +179,7 @@ export async function pushMetadata(
 	env: Env,
 ) {
 	// GET/PUT /users/@me/applications/:id/role-connection
-	const url = `https://discord.com/api/v10/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`;
+	const url = `${baseUrl}/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`;
 	const accessToken = await getAccessToken(userId, data, env);
 	const body = {
 		platform_name: 'Fitbit Discord Bot',
@@ -206,7 +210,7 @@ export async function getMetadata(
 	env: Env,
 ) {
 	// GET/PUT /users/@me/applications/:id/role-connection
-	const url = `https://discord.com/api/v10/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`;
+	const url = `${baseUrl}/users/@me/applications/${env.DISCORD_CLIENT_ID}/role-connection`;
 	const accessToken = await getAccessToken(userId, data, env);
 	const res = await fetch(url, {
 		headers: {
@@ -222,7 +226,7 @@ export async function getMetadata(
  * Note: uses a Bot token for authentication, not a user token.
  */
 export async function getMetadataSchema(env: Env) {
-	const url = `https://discord.com/api/v10/applications/${env.DISCORD_CLIENT_ID}/role-connections/metadata`;
+	const url = `${baseUrl}/applications/${env.DISCORD_CLIENT_ID}/role-connections/metadata`;
 	const res = await fetch(url, {
 		headers: {
 			'Content-Type': 'application/json',
@@ -231,4 +235,27 @@ export async function getMetadataSchema(env: Env) {
 	});
 	const responseData = await res.json();
 	return responseData;
+}
+
+let commands: APIApplicationCommand[];
+
+export async function getCommands(env: Env) {
+	if (!commands) {
+		const url = `${baseUrl}/applications/${env.DISCORD_CLIENT_ID}/commands`;
+		const response = await fetch(url, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bot ${env.DISCORD_TOKEN}`,
+			},
+		});
+		if (!response.ok) {
+			await throwFetchError(response);
+		}
+
+		const data = (await response.json()) as APIApplicationCommand[];
+		console.log(data);
+		commands = data;
+	}
+	return commands;
 }

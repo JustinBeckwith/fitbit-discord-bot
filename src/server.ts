@@ -3,15 +3,16 @@ import {
 	InteractionType,
 	verifyKey,
 } from 'discord-interactions';
-import { type Context, Hono, type HonoRequest } from 'hono';
+import { Hono, type HonoRequest } from 'hono';
 import { getSignedCookie, setSignedCookie } from 'hono/cookie';
-import { CONNECT, DISCONNECT, GET_PROFILE } from './commands.js';
+import { commands } from './commands/commands.js';
 import { updateMetadata } from './common.js';
 import type { Env } from './config.js';
 import type { Interaction } from './discord-types.js';
 import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
 import * as storage from './storage.js';
+import { success } from './success.js';
 
 /**
  * Main HTTP server used for the bot.
@@ -29,114 +30,31 @@ app.get('/', async (c) => {
  * to validate request signatures, and returns relevent slash command data.
  */
 app.post('/', async (c) => {
+	console.log('hello');
 	const { isValid, interaction } = await verifyDiscordRequest(c.req, c.env);
 	if (!isValid || !interaction) {
 		return c.text('Bad request signature.', { status: 401 });
 	}
 
-	console.log(JSON.stringify(interaction, null, 2));
-
 	if (interaction.type === InteractionType.PING) {
-		console.log('Handling Ping request');
 		return c.json({
 			type: InteractionResponseType.PONG,
 		});
 	}
 
 	if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-		console.log(`Handling application command: ${interaction.data.name}`);
-		switch (interaction.data.name.toLowerCase()) {
-			case CONNECT.name.toLowerCase(): {
-				return c.json({
-					type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-					data: {
-						content: `Visit ${c.env.VERIFICATION_URL} to connect your Fitbit account.`,
-					},
-				});
-			}
-			/**
-			 * DISCONNECT
-			 * Revokes all tokens to both Discord and Fitbit, while clearing out
-			 * all associated data:
-			 * 1. Push empty Metadata to Discord to null out the verified role
-			 * 2. Revoke Discord OAuth2 tokens
-			 * 3. Fetch the Fitbit UserId using the Discord UserId
-			 * 4. Revoke Fitbit OAuth2 tokens
-			 * 5. Let the user know the slash command worked
-			 */
-			case DISCONNECT.name.toLowerCase(): {
-				const userId = interaction.member.user.id;
-				let cleanedUp = false;
-				const discordTokens = await storage.getDiscordTokens(c.env, userId);
-
-				if (discordTokens) {
-					cleanedUp = true;
-
-					// 1. Push empty Metadata to Discord to null out the verified role
-					await discord.pushMetadata(userId, discordTokens, {}, c.env);
-
-					// 2. Revoke Discord OAuth2 tokens
-					await discord.revokeAccess(userId, c.env);
-				}
-
-				// 3. Fetch the Fitbit UserId using the Discord UserId
-				const fitbitUserId = await storage.getLinkedFitbitUserId(c.env, userId);
-				if (fitbitUserId) {
-					cleanedUp = true;
-
-					// 4. Revoke Fitbit OAuth2 tokens
-					await fitbit.revokeAccess(fitbitUserId, c.env);
-					await storage.deleteLinkedFitbitUser(c.env, userId);
-				}
-
-				// 5. Let the user know the slash command worked
-				if (cleanedUp) {
-					return c.json({
-						type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-						data: {
-							content: 'Fitbit account disconnected.',
-						},
-					});
-				}
-				return sendNoConnectionFound(c);
-			}
-			case GET_PROFILE.name.toLowerCase(): {
-				/**
-				 * GET PROFILE
-				 * If the user has a linked Fitbit account, fetch the profile data.
-				 */
-				const userId = interaction.member.user.id;
-				const fitbitUserId = await storage.getLinkedFitbitUserId(c.env, userId);
-				if (!fitbitUserId) {
-					return sendNoConnectionFound(c);
-				}
-
-				const fitbitTokens = await storage.getFitbitTokens(c.env, fitbitUserId);
-				if (!fitbitTokens) {
-					return sendNoConnectionFound(c);
-				}
-				const profile = await fitbit.getProfile(
-					fitbitUserId,
-					fitbitTokens,
-					c.env,
-				);
-				const metadata = {
-					averagedailysteps: profile.user.averageDailySteps,
-					ambassador: profile.user.ambassador,
-					membersince: profile.user.memberSince,
-					iscoach: profile.user.isCoach,
-				};
-				return c.json({
-					type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-					data: {
-						content: `\`\`\`${JSON.stringify(metadata)}\`\`\``,
-					},
-				});
-			}
-			default:
-				console.error('Unknown Command');
-				return c.json({ error: 'Unknown Type' }, { status: 400 });
+		console.log(interaction.data);
+		const command = commands.find(
+			(c) => c.name.toLowerCase() === interaction.data.name.toLowerCase(),
+		);
+		if (!command) {
+			return c.json({
+				type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+				data: { content: 'Unknown command.' },
+			});
 		}
+		const response = await command.execute(interaction, c.env);
+		return c.json(response);
 	}
 	return c.json({ error: 'Unknown Type' }, { status: 400 });
 });
@@ -148,7 +66,6 @@ app.post('/', async (c) => {
  */
 app.get('/verified-role', async (c) => {
 	const { url, state } = await discord.getOAuthUrl(c.env);
-	console.log(url, state);
 
 	// Set the signed state param in the response cookies
 	await setSignedCookie(c, 'clientState', state, c.env.COOKIE_SECRET, {
@@ -252,8 +169,7 @@ app.get('/fitbit-oauth-callback', async (c) => {
 		await updateMetadata(userId, c.env);
 
 		await storage.setLinkedFitbitUserId(c.env, discordUserId, userId);
-
-		return c.text('You did it!  Now go back to Discord.');
+		return c.html(success);
 	} catch (e) {
 		console.error(e);
 		return c.body(null, 500);
@@ -270,7 +186,6 @@ app.get('/fitbit-oauth-callback', async (c) => {
 app.get('/fitbit-webhook', async (c) => {
 	const verify = c.req.query('verify');
 	if (verify === c.env.FITBIT_SUBSCRIBER_VERIFY) {
-		console.log(`verified: ${verify}`);
 		return c.body(null, 204);
 	}
 	return c.body(null, 404);
@@ -304,14 +219,6 @@ app.post('/fitbit-webhook', async (c) => {
 // 	return c.text('done');
 // });
 
-function sendNoConnectionFound(c: Context) {
-	return c.json({
-		type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-		data: {
-			content: `🥴 no Fitbit connection info found.  Visit ${c.env.VERIFICATION_URL} to set it up.`,
-		},
-	});
-}
 async function verifyDiscordRequest(request: HonoRequest, env: Env) {
 	const signature = request.header('x-signature-ed25519');
 	const timestamp = request.header('x-signature-timestamp');

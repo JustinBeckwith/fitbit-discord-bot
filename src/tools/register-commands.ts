@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { CONNECT, DISCONNECT, GET_PROFILE } from '../commands.js';
+import { commands } from '../commands/commands.js';
 dotenv.config({ path: '.dev.vars' });
 
 /**
@@ -20,7 +20,7 @@ const res = await fetch(url, {
 		Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
 	},
 	method: 'PUT',
-	body: JSON.stringify([GET_PROFILE, DISCONNECT, CONNECT]),
+	body: JSON.stringify(commands),
 });
 
 if (!res.ok) {

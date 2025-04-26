@@ -42,5 +42,11 @@ const res = await fetch(url, {
 	},
 });
 
+if (!res.ok) {
+	console.error('Failed to register metadata schema');
+	console.error(await res.text());
+	process.exit(1);
+}
+
 const schema = await res.json();
 console.log(schema);

@@ -181,11 +181,7 @@ export type Command = {
 	description: string;
 	options?: CommandOption[];
 	integration_types?: CommandIntegrationType[];
-	execute: (
-		message: Interaction,
-		env: Env,
-		ctx: ExecutionContext,
-	) => Promise<DiscordResponse>;
+	execute: (message: Interaction, env: Env) => Promise<DiscordResponse>;
 };
 
 export type CommandOption = {

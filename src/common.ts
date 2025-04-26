@@ -1,3 +1,5 @@
+import { InteractionResponseType } from 'discord-interactions';
+import type { Context } from 'hono';
 import type { Env } from './config.js';
 import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
@@ -42,4 +44,34 @@ export async function updateMetadata(userId: string, env: Env) {
 
 	// Push the data to Discord.
 	await discord.pushMetadata(userId, discordTokens, metadata, env);
+}
+
+export function sendNoConnectionFound(env: Env) {
+	return {
+		type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+		data: {
+			content: `🥴 no Fitbit connection info found.  Visit ${env.VERIFICATION_URL} to set it up.`,
+		},
+	};
+}
+
+export async function throwFetchError(response: Response) {
+	let errorText = `Error fetching ${response.url}: ${response.status} ${response.statusText}`;
+	try {
+		const error = await response.text();
+		if (error) {
+			errorText = `${errorText} \n\n ${error}`;
+		}
+	} catch {}
+
+	throw new FetchError(errorText, response);
+}
+
+export class FetchError extends Error {
+	constructor(
+		message: string,
+		public response: Response,
+	) {
+		super(message);
+	}
 }

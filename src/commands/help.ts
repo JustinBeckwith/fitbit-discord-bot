@@ -1,7 +1,11 @@
+import {
+	type APIInteraction,
+	InteractionResponseType,
+	MessageFlags,
+} from 'discord-api-types/v10';
 import type { Env } from '../config.js';
-import { InteractionResponseType, MessageFlags, type APIInteraction } from 'discord-api-types/v10';
-import * as discord from '../discord.js';
 import type { Command } from '../discord-types.js';
+import * as discord from '../discord.js';
 
 export const cmd: Command = {
 	name: 'help',

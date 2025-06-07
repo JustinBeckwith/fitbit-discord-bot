@@ -1,10 +1,13 @@
+import {
+	type APIInteraction,
+	InteractionResponseType,
+} from 'discord-api-types/v10';
 import { sendNoConnectionFound } from '../common.js';
 import type { Env } from '../config.js';
-import { InteractionResponseType, type APIInteraction } from 'discord-api-types/v10';
+import type { Command } from '../discord-types.js';
 import * as discord from '../discord.js';
 import * as fitbit from '../fitbit.js';
 import * as storage from '../storage.js';
-import type { Command } from '../discord-types.js';
 
 export const cmd: Command = {
 	name: 'disconnect',

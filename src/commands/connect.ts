@@ -1,5 +1,8 @@
+import {
+	type APIInteraction,
+	InteractionResponseType,
+} from 'discord-api-types/v10';
 import type { Env } from '../config.js';
-import { InteractionResponseType, type APIInteraction } from 'discord-api-types/v10';
 import type { Command } from '../discord-types.js';
 
 export const cmd: Command = {

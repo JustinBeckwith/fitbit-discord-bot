@@ -1,3 +1,8 @@
+import {
+	type APIInteraction,
+	InteractionResponseType,
+	InteractionType,
+} from 'discord-api-types/v10';
 import { verifyKey } from 'discord-interactions';
 import { Hono, type HonoRequest } from 'hono';
 import { getSignedCookie, setSignedCookie } from 'hono/cookie';
@@ -9,7 +14,6 @@ import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
 import * as storage from './storage.js';
 import { success } from './success.js';
-import { type APIInteraction, InteractionResponseType, InteractionType } from 'discord-api-types/v10';
 
 /**
  * Main HTTP server used for the bot.

@@ -1,4 +1,8 @@
-import type { APIApplicationCommand, RESTPostOAuth2AccessTokenResult, RESTGetAPIOAuth2CurrentAuthorizationResult } from 'discord-api-types/v10';
+import type {
+	APIApplicationCommand,
+	RESTGetAPIOAuth2CurrentAuthorizationResult,
+	RESTPostOAuth2AccessTokenResult,
+} from 'discord-api-types/v10';
 import { throwFetchError } from './common.js';
 import type { Env } from './config.js';
 import * as storage from './storage.js';
@@ -130,7 +134,8 @@ export async function getUserData(tokens: RESTPostOAuth2AccessTokenResult) {
 			Authorization: `Bearer ${tokens.access_token}`,
 		},
 	});
-	const responseData = (await res.json()) as RESTGetAPIOAuth2CurrentAuthorizationResult;
+	const responseData =
+		(await res.json()) as RESTGetAPIOAuth2CurrentAuthorizationResult;
 	return responseData;
 }
 

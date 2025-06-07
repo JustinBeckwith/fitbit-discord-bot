@@ -1,9 +1,9 @@
-import { InteractionResponseType } from 'discord-interactions';
 import { sendNoConnectionFound } from '../common.js';
 import type { Env } from '../config.js';
-import type { Command, Interaction } from '../discord-types.js';
+import { InteractionResponseType, type APIInteraction } from 'discord-api-types/v10';
 import * as fitbit from '../fitbit.js';
 import * as storage from '../storage.js';
+import type { Command } from '../discord-types.js';
 
 export const cmd: Command = {
 	name: 'get-profile',
@@ -15,7 +15,7 @@ export const cmd: Command = {
  * GET PROFILE
  * If the user has a linked Fitbit account, fetch the profile data.
  */
-async function execute(interaction: Interaction, env: Env) {
+async function execute(interaction: APIInteraction, env: Env) {
 	const userId = interaction.member.user.id;
 	const fitbitUserId = await storage.getLinkedFitbitUserId(env, userId);
 	if (!fitbitUserId) {
@@ -34,9 +34,9 @@ async function execute(interaction: Interaction, env: Env) {
 		iscoach: profile.user.isCoach,
 	};
 	return {
-		type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+		type: InteractionResponseType.ChannelMessageWithSource as const,
 		data: {
-			content: `\`\`\`${JSON.stringify(metadata)}\`\`\``,
+			content: `\`\`\`json\n${JSON.stringify(metadata, null, 2)}\`\`\``,
 		},
 	};
 }

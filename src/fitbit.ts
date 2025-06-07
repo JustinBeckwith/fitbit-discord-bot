@@ -213,7 +213,7 @@ export async function getOAuthTokens(
 		},
 	});
 	if (!r.ok) {
-		throwFetchError(r);
+		await throwFetchError(r);
 	}
 	const data = (await r.json()) as OAuthTokens;
 	return data;
@@ -250,7 +250,7 @@ async function getAccessToken(
 			},
 		});
 		if (!r.ok) {
-			throwFetchError(r);
+			await throwFetchError(r);
 		}
 		const tokens = (await r.json()) as OAuthTokens;
 		console.log(`new access token: ${tokens.access_token}`);
@@ -289,7 +289,7 @@ export async function revokeAccess(userId: string, env: Env) {
 			},
 		});
 		if (!res.ok) {
-			throwFetchError(res);
+			await throwFetchError(res);
 		}
 	} catch (e) {
 		// if revoking the token fails, remove the tokens from our storage and
@@ -321,7 +321,7 @@ export async function createSubscription(
 		},
 	});
 	if (!res.ok) {
-		throwFetchError(res);
+		await throwFetchError(res);
 	}
 }
 
@@ -342,7 +342,7 @@ export async function listSubscriptions(
 		},
 	});
 	if (!res.ok) {
-		throwFetchError(res);
+		await throwFetchError(res);
 	}
 	const responseData = await res.json();
 	return responseData;
@@ -365,7 +365,7 @@ export async function getProfile(
 		},
 	});
 	if (!res.ok) {
-		throwFetchError(res);
+		await throwFetchError(res);
 	}
 	const responseData = (await res.json()) as ProfileData;
 	return responseData;
@@ -393,7 +393,7 @@ export async function getRecentActivities(
 		},
 	});
 	if (!res.ok) {
-		throwFetchError(res);
+		await throwFetchError(res);
 	}
 	const responseData = await res.json();
 	console.log(responseData);

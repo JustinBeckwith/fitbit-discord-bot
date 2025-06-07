@@ -1,4 +1,4 @@
-import type { APIApplicationCommand } from 'discord-api-types/v10.js';
+import type { APIApplicationCommand, RESTPostOAuth2AccessTokenResult, RESTGetAPIOAuth2CurrentAuthorizationResult } from 'discord-api-types/v10';
 import { throwFetchError } from './common.js';
 import type { Env } from './config.js';
 import * as storage from './storage.js';
@@ -6,40 +6,6 @@ import * as storage from './storage.js';
 /**
  * Code specific to communicating with the Discord API.
  */
-
-export interface OAuth2TokenResponse {
-	access_token: string;
-	expires_in: number;
-	refresh_token: string;
-	scope: string;
-	token_type: string;
-}
-
-export interface OAuth2UserInfo {
-	application: {
-		id: string;
-		name: string;
-		icon: string | null;
-		description: string;
-		summary: string;
-		type: string | null;
-		hook: boolean;
-		bot_public: boolean;
-		bot_require_code_grant: boolean;
-		verify_key: string;
-		flags: number;
-	};
-	scopes: string[];
-	expires: string;
-	user: {
-		id: string;
-		username: string;
-		avatar: string;
-		avatar_decoration: string | null;
-		discriminator: string;
-		public_flags: number;
-	};
-}
 
 /**
  * The following methods all facilitate OAuth2 communication with Discord.
@@ -72,7 +38,7 @@ export function getOAuthUrl(env: Env) {
 export async function getOAuthTokens(
 	code: string,
 	env: Env,
-): Promise<OAuth2TokenResponse> {
+): Promise<RESTPostOAuth2AccessTokenResult> {
 	const url = `${baseUrl}/oauth2/token`;
 	const data = new URLSearchParams({
 		client_id: env.DISCORD_CLIENT_ID,
@@ -89,7 +55,7 @@ export async function getOAuthTokens(
 			'Content-Type': 'application/x-www-form-urlencoded',
 		},
 	});
-	const responseData = (await r.json()) as OAuth2TokenResponse;
+	const responseData = (await r.json()) as RESTPostOAuth2AccessTokenResult;
 	return responseData;
 }
 
@@ -118,7 +84,7 @@ export async function getAccessToken(
 				'Content-Type': 'application/x-www-form-urlencoded',
 			},
 		});
-		const responseData = (await r.json()) as OAuth2TokenResponse;
+		const responseData = (await r.json()) as RESTPostOAuth2AccessTokenResult;
 		console.log(`new discord access token: ${responseData.access_token}`);
 		data.access_token = responseData.access_token;
 		data.expires_at = Date.now() + responseData.expires_in * 1000;
@@ -157,14 +123,14 @@ export async function revokeAccess(userId: string, env: Env) {
 /**
  * Given a user based access token, fetch profile information for the current user.
  */
-export async function getUserData(tokens: OAuth2TokenResponse) {
+export async function getUserData(tokens: RESTPostOAuth2AccessTokenResult) {
 	const url = `${baseUrl}/oauth2/@me`;
 	const res = await fetch(url, {
 		headers: {
 			Authorization: `Bearer ${tokens.access_token}`,
 		},
 	});
-	const responseData = (await res.json()) as OAuth2UserInfo;
+	const responseData = (await res.json()) as RESTGetAPIOAuth2CurrentAuthorizationResult;
 	return responseData;
 }
 

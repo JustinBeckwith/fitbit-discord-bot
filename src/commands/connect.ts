@@ -1,6 +1,9 @@
-import { InteractionResponseType } from 'discord-interactions';
+import {
+	type APIInteraction,
+	InteractionResponseType,
+} from 'discord-api-types/v10';
 import type { Env } from '../config.js';
-import type { Command, Interaction } from '../discord-types.js';
+import type { Command } from '../discord-types.js';
 
 export const cmd: Command = {
 	name: 'connect',
@@ -8,9 +11,9 @@ export const cmd: Command = {
 	execute,
 };
 
-async function execute(interaction: Interaction, env: Env) {
+async function execute(interaction: APIInteraction, env: Env) {
 	return {
-		type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+		type: InteractionResponseType.ChannelMessageWithSource as const,
 		data: {
 			content: `Visit ${env.VERIFICATION_URL} to connect your Fitbit account.`,
 		},

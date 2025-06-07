@@ -1,5 +1,4 @@
-import { InteractionResponseType } from 'discord-interactions';
-import type { Context } from 'hono';
+import { InteractionResponseType } from 'discord-api-types/v10';
 import type { Env } from './config.js';
 import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
@@ -48,7 +47,7 @@ export async function updateMetadata(userId: string, env: Env) {
 
 export function sendNoConnectionFound(env: Env) {
 	return {
-		type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+		type: InteractionResponseType.ChannelMessageWithSource as const,
 		data: {
 			content: `🥴 no Fitbit connection info found.  Visit ${env.VERIFICATION_URL} to set it up.`,
 		},

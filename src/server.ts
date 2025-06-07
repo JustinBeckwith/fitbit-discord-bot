@@ -1,15 +1,15 @@
 import {
+	type APIInteraction,
 	InteractionResponseType,
 	InteractionType,
-	verifyKey,
-} from 'discord-interactions';
+} from 'discord-api-types/v10';
+import { verifyKey } from 'discord-interactions';
 import { Hono, type HonoRequest } from 'hono';
 import { getSignedCookie, setSignedCookie } from 'hono/cookie';
 import { updateActivity } from './activity.js';
 import { commands } from './commands/commands.js';
 import { updateMetadata } from './common.js';
 import type { Env } from './config.js';
-import type { Interaction } from './discord-types.js';
 import * as discord from './discord.js';
 import * as fitbit from './fitbit.js';
 import * as storage from './storage.js';
@@ -36,19 +36,19 @@ app.post('/', async (c) => {
 		return c.text('Bad request signature.', { status: 401 });
 	}
 
-	if (interaction.type === InteractionType.PING) {
+	if (interaction.type === InteractionType.Ping) {
 		return c.json({
-			type: InteractionResponseType.PONG,
+			type: InteractionResponseType.Pong,
 		});
 	}
 
-	if (interaction.type === InteractionType.APPLICATION_COMMAND) {
+	if (interaction.type === InteractionType.ApplicationCommand) {
 		const command = commands.find(
 			(c) => c.name.toLowerCase() === interaction.data.name.toLowerCase(),
 		);
 		if (!command) {
 			return c.json({
-				type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+				type: InteractionResponseType.ChannelMessageWithSource,
 				data: { content: 'Unknown command.' },
 			});
 		}
@@ -240,7 +240,7 @@ async function verifyDiscordRequest(request: HonoRequest, env: Env) {
 		return { isValid: false };
 	}
 
-	return { interaction: JSON.parse(body) as Interaction, isValid: true };
+	return { interaction: JSON.parse(body) as APIInteraction, isValid: true };
 }
 
 export default app;

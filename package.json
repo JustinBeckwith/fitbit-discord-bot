@@ -28,7 +28,7 @@
     "@cloudflare/workers-types": "^4.20250423.0",
     "@types/express": "^5.0.1",
     "discord-api-types": "^0.38.11",
-    "dotenv": "^16.5.0",
+    "dotenv": "^17.0.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "wrangler": "^4.13.0"

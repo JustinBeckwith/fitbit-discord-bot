@@ -2,7 +2,6 @@ import type {
 	APIApplicationCommandOption,
 	APIApplicationIntegrationTypesConfigMap,
 	APIInteraction,
-	APIInteractionResponse,
 	APIInteractionResponseChannelMessageWithSource,
 } from 'discord-api-types/v10';
 import type { Env } from './config.js';

@@ -4,8 +4,8 @@ import {
 	MessageFlags,
 } from 'discord-api-types/v10';
 import type { Env } from '../config.js';
-import type { Command } from '../discord-types.js';
 import * as discord from '../discord.js';
+import type { Command } from '../discord-types.js';
 
 export const cmd: Command = {
 	name: 'help',
@@ -13,7 +13,7 @@ export const cmd: Command = {
 	execute,
 };
 
-async function execute(interaction: APIInteraction, env: Env) {
+async function execute(_interaction: APIInteraction, env: Env) {
 	const commands = await discord.getCommands(env);
 	const commandRefs = commands.map(
 		(c) => `- </${c.name}:${c.id}>: ${c.description}`,

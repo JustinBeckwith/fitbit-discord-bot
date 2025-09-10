@@ -11,7 +11,7 @@ export const cmd: Command = {
 	execute,
 };
 
-async function execute(interaction: APIInteraction, env: Env) {
+async function execute(_interaction: APIInteraction, env: Env) {
 	return {
 		type: InteractionResponseType.ChannelMessageWithSource as const,
 		data: {

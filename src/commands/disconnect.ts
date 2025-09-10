@@ -4,8 +4,8 @@ import {
 } from 'discord-api-types/v10';
 import { sendNoConnectionFound } from '../common.js';
 import type { Env } from '../config.js';
-import type { Command } from '../discord-types.js';
 import * as discord from '../discord.js';
+import type { Command } from '../discord-types.js';
 import * as fitbit from '../fitbit.js';
 import * as storage from '../storage.js';
 

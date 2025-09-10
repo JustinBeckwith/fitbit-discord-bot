@@ -4,7 +4,7 @@ import * as storage from './storage';
 
 export async function updateActivity(
 	userId: string,
-	event: fitbit.WebhookBody,
+	_event: fitbit.WebhookBody,
 	env: Env,
 ) {
 	// Get the user's Fitbit data

@@ -1,4 +1,4 @@
-# Discord Fitbit Verified Role Bot
+M# Discord Fitbit Verified Role Bot
 
 A Discord bot that verifies users' Fitbit accounts and manages their roles based on their Fitbit profile data. The bot uses Discord's Role Connections feature to automatically update user roles based on their Fitbit profile information.
 

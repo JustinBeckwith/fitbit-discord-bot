@@ -31,7 +31,7 @@
     "dotenv": "^17.0.0",
     "tsx": "^4.19.3",
     "typescript": "^6.0.0",
-    "wrangler": "^4.13.0"
+    "wrangler": "^4.76.0"
   },
   "keywords": [],
   "author": "Justin Beckwith <justin.beckwith@gmail.com>",

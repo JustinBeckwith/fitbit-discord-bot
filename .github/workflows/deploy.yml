@@ -31,7 +31,7 @@ jobs:
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
-      - uses: cloudflare/wrangler-action@v3
+      - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }} 
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

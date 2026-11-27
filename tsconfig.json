@@ -3,8 +3,9 @@
     "target": "es2022",
     "module": "ES2022",
     "outDir": "build",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "sourceMap": true,
+    "strict": false,
     "allowSyntheticDefaultImports": true,
     "noEmit": true
   }
